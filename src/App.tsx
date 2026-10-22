@@ -238,9 +238,9 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200/80 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© {new Date().getFullYear()} EduArchitect • English Pedagogical AI Architect</p>
+          <p>© {new Date().getFullYear()} EduGenius • Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR & Bloom</p>
           <div className="flex items-center space-x-4 text-slate-400">
-            <span>CEFR Framework Pre-A1 - C1</span>
+            <span>Khung CEFR Pre-A1 - C2</span>
             <span>•</span>
             <span>Bloom's Revised Taxonomy</span>
             <span>•</span>
