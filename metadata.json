@@ -1,6 +1,1 @@
-{
-  "name": "EduArchitect - Chuyên Gia Biên Soạn Học Liệu Tiếng Anh",
-  "description": "Hệ thống AI chuyên nghiệp hỗ trợ giáo viên tiếng Anh biên soạn đề thi, phiếu bài tập bám sát CEFR, Thang đo Bloom và xuất file Word chuẩn sư phạm.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
+{"name":"EduGenius - Thiết kế đề thi và học liệu tiếng Anh với AI","description":"Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR & Bloom","requestFramePermissions":[],"majorCapabilities":["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]}
