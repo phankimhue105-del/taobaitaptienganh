@@ -12,6 +12,7 @@ import {
   Lightbulb,
   ListPlus,
   FileType,
+  AlertTriangle,
 } from 'lucide-react';
 import { ExtractedMaterial, CefrLevel } from '../types';
 import { fetchExtractMaterials } from '../utils/apiClient';
@@ -41,7 +42,11 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
     formatCategory: 'word' | 'pdf' | 'image';
   } | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractError, setExtractError] = useState<{
+    message: string;
+    isQuota?: boolean;
+    model?: string;
+  } | string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,7 +133,19 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
       lastAnalyzedKeyRef.current = inputSignature;
       lastAnalyzedDataRef.current = data;
     } catch (err: any) {
-      setExtractError(err.message || 'Không thể kết nối đến máy chủ.');
+      const isQuota =
+        err.status === 429 ||
+        err.isDailyQuotaExhausted ||
+        err.quotaType === 'daily' ||
+        err.code === 'DAILY_QUOTA_EXHAUSTED' ||
+        err.message?.includes('hạn mức') ||
+        err.message?.includes('429');
+
+      setExtractError({
+        message: err.message || 'Không thể kết nối đến máy chủ.',
+        isQuota: Boolean(isQuota),
+        model: err.model,
+      });
     } finally {
       setIsExtracting(false);
     }
@@ -270,9 +287,36 @@ Grammar:
             </div>
 
             {extractError && (
-              <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
-                {extractError}
-              </div>
+              typeof extractError === 'string' ? (
+                <div className="mt-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{extractError}</span>
+                </div>
+              ) : extractError.isQuota ? (
+                <div className="mt-3 p-4 bg-amber-50/95 border border-amber-300 rounded-2xl text-xs text-amber-900 shadow-xs space-y-2.5 animate-in fade-in duration-200">
+                  <div className="flex items-center space-x-2 font-bold text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Hạn mức Gemini API Free Tier (429 RESOURCE_EXHAUSTED)</span>
+                  </div>
+                  <p className="text-amber-800 leading-relaxed text-[11.5px]">
+                    {extractError.message}
+                  </p>
+                  <div className="pt-2 border-t border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] gap-2 font-medium">
+                    <span className="flex items-center space-x-1.5 text-emerald-800">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Dữ liệu học liệu và tệp của bạn vẫn được giữ nguyên vẹn.</span>
+                    </span>
+                    <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md font-mono text-[10.5px]">
+                      Model: {extractError.model || 'gemini-3.8-flash'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{extractError.message}</span>
+                </div>
+              )
             )}
 
             {/* Action Button */}
