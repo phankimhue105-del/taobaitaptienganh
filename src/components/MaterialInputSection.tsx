@@ -14,6 +14,7 @@ import {
   FileType,
 } from 'lucide-react';
 import { ExtractedMaterial, CefrLevel } from '../types';
+import { fetchExtractMaterials } from '../utils/apiClient';
 
 interface MaterialInputSectionProps {
   rawText: string;
@@ -98,23 +99,13 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
     setExtractError(null);
 
     try {
-      const response = await fetch('/api/extract-materials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: rawText,
-          fileBase64: selectedFile?.base64,
-          mimeType: selectedFile?.type,
-          fileName: selectedFile?.name,
-        }),
+      const data = await fetchExtractMaterials({
+        text: rawText,
+        fileBase64: selectedFile?.base64,
+        mimeType: selectedFile?.type,
+        fileName: selectedFile?.name,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Lỗi khi trích xuất học liệu.');
-      }
-
-      const data = await response.json();
       if (data._rawDocxText && !rawText.trim()) {
         setRawText(data._rawDocxText);
       }
