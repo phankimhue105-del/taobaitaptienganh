@@ -5,7 +5,7 @@ export default async function handler(req: any, res: any) {
 
   return res.status(200).json({
     status: 'ok',
-    service: 'EduArchitect Vercel API',
+    service: 'EduGenius Vercel API',
     timestamp: new Date().toISOString(),
     geminiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
   });
