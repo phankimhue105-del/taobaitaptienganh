@@ -116,6 +116,14 @@ export const AdjustmentModal: React.FC<AdjustmentModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+          {/* Quota Saving Notice */}
+          <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-start space-x-2 text-[11.5px] text-blue-900 leading-relaxed">
+            <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <strong>Mẹo tiết kiệm Quota:</strong> Nếu chỉ cần sửa chính tả, đổi đáp án hoặc thay nội dung các phương án A/B/C/D, bạn có thể bấm <strong>"Sửa trực tiếp (0đ)"</strong> ngay trên màn hình xem trước đề thi mà <strong>không tốn lượt gọi AI nào</strong>. Chỉ dùng AI khi bạn cần sinh ngữ cảnh mới hoặc tạo phương án gây nhiễu tự động.
+            </div>
+          </div>
+
           {/* Target Selectors */}
           <div className="grid grid-cols-2 gap-3">
             <div>
