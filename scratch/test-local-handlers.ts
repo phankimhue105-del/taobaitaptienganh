@@ -6,6 +6,7 @@ import extractHandler from '../api/extract-materials.ts';
 import generateHandler from '../api/generate-exercises.ts';
 import adjustHandler from '../api/adjust-exercise.ts';
 import { Document, Paragraph, TextRun, Packer } from 'docx';
+import { getGeminiModel, parseAndFormatAIError } from '../src/server/aiService.ts';
 // @ts-ignore
 import mammoth from 'mammoth';
 
@@ -159,6 +160,34 @@ async function runLocalHandlerTests() {
   assertTest('/api/adjust-exercise KHÔNG bị rewrite vào index.html', !spaRegex.test('/api/adjust-exercise'));
   assertTest('/ (homepage) ĐƯỢC rewrite vào index.html', spaRegex.test('/'));
   assertTest('/dashboard ĐƯỢC rewrite vào index.html', spaRegex.test('/dashboard'));
+
+  // --- 7. Quota Error Handling & Model Configuration Verification ---
+  console.log('\n--- 7. Quota 429 & AI Error Formatting Tests ---');
+  assertTest('getGeminiModel() trả về model hợp lệ', Boolean(getGeminiModel()));
+
+  const dailyQuotaError = {
+    status: 429,
+    message: 'Quota exceeded for quota metric generate_content_free_tier_requests and limit GenerateRequestsPerDayPerModel-FreeTier of service generativelanguage.googleapis.com',
+  };
+  const parsedDaily = parseAndFormatAIError(dailyQuotaError);
+  assertTest('Nhận diện chính xác 429 Daily Quota Exhausted', parsedDaily.status === 429 && parsedDaily.code === 'DAILY_QUOTA_EXHAUSTED');
+  assertTest('Cờ isDailyQuotaExhausted được bật khi hết hạn mức ngày', parsedDaily.isDailyQuotaExhausted === true);
+  assertTest('Thông báo lỗi chứa hướng dẫn tiếng Việt rõ ràng', parsedDaily.message.includes('hạn mức'));
+
+  const minuteLimitError = {
+    status: 429,
+    message: 'Rate limit exceeded for requests per minute (RPM). Please wait.',
+  };
+  const parsedMinute = parseAndFormatAIError(minuteLimitError);
+  assertTest('Nhận diện chính xác 429 Rate Limit Per Minute', parsedMinute.status === 429 && parsedMinute.code === 'RATE_LIMIT_PER_MINUTE');
+  assertTest('isDailyQuotaExhausted là false khi chỉ bị rate limit phút', parsedMinute.isDailyQuotaExhausted === false);
+
+  const overload503Error = {
+    status: 503,
+    message: 'The model is overloaded. Please try again later.',
+  };
+  const parsed503 = parseAndFormatAIError(overload503Error);
+  assertTest('Nhận diện chính xác 503 Service Unavailable', parsed503.status === 503 && parsed503.code === 'SERVICE_UNAVAILABLE');
 
   console.log('\n====================================================');
   console.log(`Kết quả kiểm thử Handlers: ${passedTests}/${totalTests} bài kiểm tra đạt.`);
