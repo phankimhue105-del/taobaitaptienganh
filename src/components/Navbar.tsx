@@ -1,5 +1,5 @@
 import React from 'react';
-import { GraduationCap, FileText, Sparkles, BookOpen, Layers } from 'lucide-react';
+import { GraduationCap, FileText, Sparkles, BookOpen, Layers, FolderOpen } from 'lucide-react';
 
 interface NavbarProps {
   onLoadSample: (sampleId: string) => void;
@@ -7,6 +7,8 @@ interface NavbarProps {
   activeStep: number;
   setActiveStep: (step: number) => void;
   hasExercises: boolean;
+  onOpenSavedExams?: () => void;
+  savedCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeStep,
   setActiveStep,
   hasExercises,
+  onOpenSavedExams,
+  savedCount = 0,
 }) => {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
@@ -85,6 +89,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Actions & Samples */}
           <div className="flex items-center space-x-2">
+            {onOpenSavedExams && (
+              <button
+                onClick={onOpenSavedExams}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition shadow-2xs relative"
+                title="Mở danh sách các đề thi đã lưu trên máy (0đ)"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Đề đã lưu</span>
+                {savedCount > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold">
+                    {savedCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             <div className="relative group">
               <button className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition shadow-2xs">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
