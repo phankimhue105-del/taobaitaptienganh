@@ -96,6 +96,7 @@ export interface ExtractedMaterial {
     examples: string[];
   }[];
   suggestedFocusTopics: string[];
+  _rawDocxText?: string;
 }
 
 export interface ExamHeaderInfo {
@@ -106,4 +107,17 @@ export interface ExamHeaderInfo {
   durationMinutes: number;
   academicYear: string;
   teacherName: string;
+}
+
+export interface SavedExam {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  rawText: string;
+  extractedMaterial: ExtractedMaterial | null;
+  parameters: ExerciseParameter[];
+  exercises: ExerciseResult[];
+  totalQuestions: number;
+  cefrLevels: CefrLevel[];
 }
