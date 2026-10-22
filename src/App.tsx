@@ -14,6 +14,7 @@ import {
   CefrLevel,
 } from './types';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { fetchGenerateExercises } from './utils/apiClient';
 
 export default function App() {
   const [activeStep, setActiveStep] = useState<number>(1);
@@ -96,22 +97,12 @@ export default function App() {
     setGenerateError(null);
 
     try {
-      const response = await fetch('/api/generate-exercises', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rawMaterial: rawText,
-          extractedData: extractedMaterial,
-          parameters: parameters,
-        }),
+      const data = await fetchGenerateExercises({
+        rawMaterial: rawText,
+        extractedData: extractedMaterial,
+        parameters: parameters,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Lỗi khi biên soạn bài tập.');
-      }
-
-      const data = await response.json();
       if (!data.exercises || data.exercises.length === 0) {
         throw new Error('AI không thể tạo danh sách bài tập. Vui lòng kiểm tra lại tham số.');
       }
