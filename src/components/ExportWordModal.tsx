@@ -59,7 +59,7 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
       const cleanTitle = (headerInfo.testTitle || 'English_Test')
         .replace(/\s+/g, '_')
         .replace(/[^a-zA-Z0-9_]/g, '');
-      a.download = `${cleanTitle}_EduArchitect.docx`;
+      a.download = `${cleanTitle}_EduGenius.docx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
