@@ -1,5 +1,5 @@
 /**
- * EduArchitect API Client
+ * EduGenius API Client
  * Cung cấp các hàm gọi API chuẩn hóa với cơ chế bắt lỗi và kiểm tra Content-Type an toàn,
  * ngăn chặn lỗi SyntaxError: Unexpected token '<' hoặc 'T' khi máy chủ trả về HTML thay vì JSON.
  */
