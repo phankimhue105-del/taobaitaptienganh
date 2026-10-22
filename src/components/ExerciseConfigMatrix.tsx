@@ -107,18 +107,18 @@ export const ExerciseConfigMatrix: React.FC<ExerciseConfigMatrixProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Header Bar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
-              <Layers className="w-5 h-5" />
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="relative z-10 max-w-2xl">
+          <div className="flex items-center space-x-2.5">
+            <span className="p-2 rounded-xl bg-blue-500/20 text-blue-200 border border-blue-400/30">
+              <Layers className="w-5 h-5 text-blue-300" />
             </span>
-            <h2 className="text-lg font-bold text-slate-900">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
               Cấu Hình Tham Số Kỹ Thuật (8 Trường Thông Tin)
             </h2>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Nhấn vào thanh <strong>"+ Thêm bài tập"</strong> để thêm từng bài tập theo nhu cầu. Mỗi bài tập gồm 8 trường thông tin chi tiết.
+          <p className="text-xs sm:text-sm text-blue-100/90 mt-2 leading-relaxed">
+            Nhấn vào thanh <strong className="text-white font-semibold">"+ Thêm bài tập"</strong> để thêm từng bài tập theo nhu cầu. Mỗi bài tập gồm 8 trường thông tin chi tiết.
           </p>
         </div>
 
@@ -126,10 +126,10 @@ export const ExerciseConfigMatrix: React.FC<ExerciseConfigMatrixProps> = ({
           <button
             onClick={onGenerate}
             disabled={isGenerating}
-            className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition ${
+            className={`relative z-10 shrink-0 flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg transition border border-white/20 ${
               isGenerating
-                ? 'bg-slate-300 cursor-not-allowed shadow-none'
-                : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-blue-500/25'
+                ? 'bg-slate-700/60 border-slate-600 text-slate-300 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 shadow-blue-500/30 hover:shadow-indigo-500/40'
             }`}
           >
             {isGenerating ? (
