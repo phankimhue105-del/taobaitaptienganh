@@ -1,5 +1,5 @@
 import React from 'react';
-import { GraduationCap, FileText, Sparkles, BookOpen, Layers, FolderOpen } from 'lucide-react';
+import { GraduationCap, FileText, Sparkles, BookOpen, Layers, FolderOpen, RotateCcw } from 'lucide-react';
 
 interface NavbarProps {
   onLoadSample: (sampleId: string) => void;
@@ -140,10 +140,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onReset}
-              className="text-xs px-2.5 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition shadow-2xs"
               title="Đặt lại tất cả"
             >
-              Làm mới
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Làm mới</span>
             </button>
           </div>
         </div>
