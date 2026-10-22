@@ -74,7 +74,7 @@ async function createSampleDocxBase64(): Promise<string> {
 
 async function runEndpointTests() {
   console.log('====================================================');
-  console.log(`EduArchitect - HTTP Endpoint Test Suite`);
+  console.log(`EduGenius - HTTP Endpoint Test Suite`);
   console.log(`Target Base URL: ${BASE_URL}`);
   console.log('====================================================\n');
 
@@ -186,4 +186,3 @@ async function runEndpointTests() {
 runEndpointTests().catch((err) => {
   console.error('Lỗi thực thi test suite:', err);
 });
-
