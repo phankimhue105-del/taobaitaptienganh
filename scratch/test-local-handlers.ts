@@ -55,7 +55,7 @@ function createMockRes(): MockResponse {
 
 async function runLocalHandlerTests() {
   console.log('====================================================');
-  console.log('EduArchitect - Local Serverless Handlers Test Suite');
+  console.log('EduGenius - Local Serverless Handlers Test Suite');
   console.log('====================================================\n');
 
   let passedTests = 0;
@@ -168,4 +168,3 @@ async function runLocalHandlerTests() {
 runLocalHandlerTests().catch((err) => {
   console.error('Lỗi thực thi local handler test suite:', err);
 });
-
