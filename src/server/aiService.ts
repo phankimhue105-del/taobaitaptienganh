@@ -54,6 +54,112 @@ Phân tích nguồn học liệu đầu vào (văn bản thô, trích xuất Wor
 - Giữ nguyên tính chính xác thuật ngữ và chính tả tiếng Anh.
 - Trả về kết quả JSON chuẩn xác theo đúng cấu trúc yêu cầu.`;
 
+/**
+ * Lấy mã định danh model Gemini được cấu hình cho server.
+ * Mặc định: gemini-3.8-flash (có thể ghi đè qua biến môi trường GEMINI_MODEL).
+ */
+export function getGeminiModel(): string {
+  return process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+}
+
+export interface FormattedAIError {
+  status: number;
+  message: string;
+  code: string;
+  quotaType?: 'daily' | 'minute' | 'other';
+  model: string;
+  isDailyQuotaExhausted: boolean;
+}
+
+/**
+ * Chuẩn hóa lỗi từ Gemini API / GoogleGenAI SDK thành thông tin lỗi có cấu trúc,
+ * phân biệt chính xác:
+ * - Hết hạn mức theo ngày (429 RESOURCE_EXHAUSTED / GenerateRequestsPerDayPerModel)
+ * - Vượt giới hạn tốc độ theo phút (429 RPM / Rate limit per minute)
+ * - Quá tải tạm thời (503 Service Unavailable)
+ * - Thiếu hoặc sai API Key (401)
+ */
+export function parseAndFormatAIError(error: any): FormattedAIError {
+  const model = getGeminiModel();
+  const rawMsg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error || ''));
+  const status = error?.status || error?.statusCode || 500;
+
+  const is429 = status === 429 || rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED');
+  const is503 = status === 503 || rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE') || rawMsg.includes('overloaded');
+
+  if (is429) {
+    const isDaily =
+      rawMsg.includes('GenerateRequestsPerDay') ||
+      rawMsg.includes('PerDayPerModel') ||
+      rawMsg.includes('free_tier_requests') ||
+      rawMsg.includes('quota metric') ||
+      rawMsg.includes('PerDay') ||
+      rawMsg.includes('Quota exceeded');
+
+    if (isDaily) {
+      return {
+        status: 429,
+        code: 'DAILY_QUOTA_EXHAUSTED',
+        quotaType: 'daily',
+        model,
+        isDailyQuotaExhausted: true,
+        message: `Mô hình "${model}" đã chạm hạn mức yêu cầu tối đa trong ngày của gói Google AI Studio Free Tier (Metric: GenerateRequestsPerDayPerModel). Dữ liệu học liệu và tệp của bạn vẫn được lưu nguyên vẹn trong phiên làm việc. Hạn mức sẽ tự động đặt lại vào lúc 00:00 giờ Thái Bình Dương (PT - khoảng 14:00 - 15:00 giờ Việt Nam). Bạn cũng có thể thiết lập biến môi trường GEMINI_MODEL trên Vercel để chuyển sang model khác mà không làm gián đoạn công việc.`,
+      };
+    }
+
+    return {
+      status: 429,
+      code: 'RATE_LIMIT_PER_MINUTE',
+      quotaType: 'minute',
+      model,
+      isDailyQuotaExhausted: false,
+      message: `Tốc độ gửi yêu cầu đến mô hình "${model}" đang vượt quá giới hạn theo phút (Rate limit per minute). Dữ liệu của bạn được bảo toàn. Vui lòng đợi khoảng 15-30 giây trước khi bấm thử lại.`,
+    };
+  }
+
+  if (is503) {
+    return {
+      status: 503,
+      code: 'SERVICE_UNAVAILABLE',
+      model,
+      isDailyQuotaExhausted: false,
+      message: `Dịch vụ Google AI đang tạm thời quá tải hoặc đang bảo trì (503 Service Unavailable). Toàn bộ dữ liệu của bạn vẫn được giữ nguyên. Vui lòng bấm thử lại sau 30-60 giây.`,
+    };
+  }
+
+  if (rawMsg.includes('API_KEY') || rawMsg.includes('apiKey') || rawMsg.includes('key not valid')) {
+    return {
+      status: 401,
+      code: 'INVALID_API_KEY',
+      model,
+      isDailyQuotaExhausted: false,
+      message: `Khóa GEMINI_API_KEY chưa được cấu hình hoặc không hợp lệ. Vui lòng kiểm tra lại biến môi trường trong Vercel Settings hoặc file .env.`,
+    };
+  }
+
+  if (
+    rawMsg.includes('Vui lòng') ||
+    rawMsg.includes('Chưa có bài tập') ||
+    rawMsg.includes('Thiếu dữ liệu')
+  ) {
+    return {
+      status: 400,
+      code: 'BAD_REQUEST',
+      model,
+      isDailyQuotaExhausted: false,
+      message: rawMsg,
+    };
+  }
+
+  return {
+    status: typeof status === 'number' && status >= 400 && status < 600 ? status : 500,
+    code: 'AI_SERVICE_ERROR',
+    model,
+    isDailyQuotaExhausted: false,
+    message: rawMsg || 'Lỗi không xác định khi kết nối với dịch vụ AI.',
+  };
+}
+
 export function getAIClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -166,7 +272,7 @@ Yêu cầu xuất ra JSON với các trường:
   parts.push({ text: extractionPrompt });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.8-flash',
+    model: getGeminiModel(),
     contents: { parts },
     config: {
       systemInstruction: EXTRACTION_SYSTEM_INSTRUCTION,
@@ -259,7 +365,7 @@ QUY TẮC BẮT BUỘC VỀ HÌNH THỨC:
 `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.8-flash',
+    model: getGeminiModel(),
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
@@ -330,7 +436,7 @@ QUY TẮC:
 `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.8-flash',
+    model: getGeminiModel(),
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
