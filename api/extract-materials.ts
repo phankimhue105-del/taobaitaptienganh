@@ -1,4 +1,4 @@
-import { extractMaterialsService } from '../src/server/aiService.ts';
+import { extractMaterialsService, parseAndFormatAIError } from '../src/server/aiService.ts';
 
 export const config = {
   api: {
@@ -33,9 +33,13 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(result);
   } catch (error: any) {
     console.error('Vercel API error in extract-materials:', error);
-    const status = error.message?.includes('Vui lòng') ? 400 : 500;
-    return res.status(status).json({
-      error: error.message || 'Lỗi xử lý trích xuất học liệu.',
+    const formatted = parseAndFormatAIError(error);
+    return res.status(formatted.status).json({
+      error: formatted.message,
+      code: formatted.code,
+      quotaType: formatted.quotaType,
+      model: formatted.model,
+      isDailyQuotaExhausted: formatted.isDailyQuotaExhausted,
     });
   }
 }
