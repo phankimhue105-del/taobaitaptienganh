@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ExtractedMaterial, CefrLevel } from '../types';
 import { fetchExtractMaterials } from '../utils/apiClient';
+import { computeStringHash, getCachedMaterial, setCachedMaterial } from '../utils/storage';
 
 interface MaterialInputSectionProps {
   rawText: string;
@@ -47,6 +48,7 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
     isQuota?: boolean;
     model?: string;
   } | string | null>(null);
+  const [loadedFromCache, setLoadedFromCache] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,13 +110,33 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
     }
 
     // Generate input signature to avoid redundant AI calls on unchanged input
-    const inputSignature = `${cleanedText}__${selectedFile?.name || ''}__${selectedFile?.base64?.length || 0}`;
+    const inputSignature = computeStringHash(
+      `${cleanedText}__${selectedFile?.name || ''}__${selectedFile?.base64?.slice(0, 1000) || ''}`
+    );
+
+    // 1. Kiểm tra cache trong bộ nhớ phiên hiện tại
     if (inputSignature === lastAnalyzedKeyRef.current && lastAnalyzedDataRef.current) {
       setExtractedMaterial(lastAnalyzedDataRef.current);
+      setLoadedFromCache(true);
       setExtractError(null);
       return;
     }
 
+    // 2. Kiểm tra cache lưu trữ lâu dài (localStorage)
+    const persistentCached = getCachedMaterial(inputSignature);
+    if (persistentCached) {
+      if (persistentCached._rawDocxText && !rawText.trim()) {
+        setRawText(persistentCached._rawDocxText);
+      }
+      setExtractedMaterial(persistentCached);
+      lastAnalyzedKeyRef.current = inputSignature;
+      lastAnalyzedDataRef.current = persistentCached;
+      setLoadedFromCache(true);
+      setExtractError(null);
+      return;
+    }
+
+    setLoadedFromCache(false);
     setIsExtracting(true);
     setExtractError(null);
 
@@ -132,6 +154,7 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
       setExtractedMaterial(data);
       lastAnalyzedKeyRef.current = inputSignature;
       lastAnalyzedDataRef.current = data;
+      setCachedMaterial(inputSignature, data);
     } catch (err: any) {
       const isQuota =
         err.status === 429 ||
@@ -358,9 +381,16 @@ Grammar:
                 <span>Hồ sơ Sư phạm Trích xuất</span>
               </h3>
               {extractedMaterial && (
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Chuẩn CEFR: {extractedMaterial.cefrRecommended}
-                </span>
+                <div className="flex items-center space-x-1.5">
+                  {loadedFromCache && (
+                    <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      Tái sử dụng Cache (0đ)
+                    </span>
+                  )}
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Chuẩn CEFR: {extractedMaterial.cefrRecommended}
+                  </span>
+                </div>
               )}
             </div>
 
