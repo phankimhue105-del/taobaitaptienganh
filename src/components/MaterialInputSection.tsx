@@ -84,14 +84,29 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const lastAnalyzedKeyRef = useRef<string>('');
+  const lastAnalyzedDataRef = useRef<ExtractedMaterial | null>(null);
+
   const removeFile = () => {
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    lastAnalyzedKeyRef.current = '';
   };
 
   const handleExtract = async () => {
-    if (!rawText.trim() && !selectedFile) {
+    if (isExtracting) return; // Prevent duplicate concurrent requests
+
+    const cleanedText = rawText.trim().replace(/\n\s*\n\s*\n+/g, '\n\n');
+    if (!cleanedText && !selectedFile) {
       setExtractError('Vui lòng nhập văn bản học liệu hoặc tải lên tệp Word, PDF, hoặc ảnh JPG/PNG.');
+      return;
+    }
+
+    // Generate input signature to avoid redundant AI calls on unchanged input
+    const inputSignature = `${cleanedText}__${selectedFile?.name || ''}__${selectedFile?.base64?.length || 0}`;
+    if (inputSignature === lastAnalyzedKeyRef.current && lastAnalyzedDataRef.current) {
+      setExtractedMaterial(lastAnalyzedDataRef.current);
+      setExtractError(null);
       return;
     }
 
@@ -100,7 +115,7 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
 
     try {
       const data = await fetchExtractMaterials({
-        text: rawText,
+        text: cleanedText,
         fileBase64: selectedFile?.base64,
         mimeType: selectedFile?.type,
         fileName: selectedFile?.name,
@@ -110,6 +125,8 @@ export const MaterialInputSection: React.FC<MaterialInputSectionProps> = ({
         setRawText(data._rawDocxText);
       }
       setExtractedMaterial(data);
+      lastAnalyzedKeyRef.current = inputSignature;
+      lastAnalyzedDataRef.current = data;
     } catch (err: any) {
       setExtractError(err.message || 'Không thể kết nối đến máy chủ.');
     } finally {
