@@ -15,6 +15,7 @@ import {
   ExerciseParameter,
   ExerciseFormat,
   CefrLevel,
+  CEFR_LEVELS,
   CognitiveLevel,
   FORMAT_LABELS,
 } from '../types';
@@ -26,8 +27,6 @@ interface ExerciseConfigMatrixProps {
   isGenerating: boolean;
   onBackToInput: () => void;
 }
-
-const CEFR_LEVELS: CefrLevel[] = ['Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1'];
 
 const COGNITIVE_LEVELS: { level: CognitiveLevel; desc: string; color: string }[] = [
   { level: 'Nhận biết', desc: 'Nhớ định nghĩa, nhận diện ngữ pháp, phát âm cơ bản', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
