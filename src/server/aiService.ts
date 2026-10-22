@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 // @ts-ignore
 import mammoth from 'mammoth';
 
@@ -30,7 +30,7 @@ Mục tiêu cốt lõi của bạn là:
    - "open_ended": Tự luận (Điền khuyết / Viết lại câu / Cho dạng đúng của từ - không có phương án A, B, C, D).
 4. Số lượng câu hỏi: Tạo đúng số lượng câu được yêu cầu.
 5. Mức độ tư duy: Điều chỉnh độ lắt léo theo 4 mức (Nhận biết, Thông hiểu, Vận dụng, Vận dụng cao).
-6. Trình độ CEFR: Sử dụng từ vựng và cấu trúc phù hợp với thang bậc (Pre A1 - C1).
+6. Trình độ CEFR: Sử dụng từ vựng và cấu trúc phù hợp với thang bậc 12 cấp độ: Pre-A1, A1, A1+, A2, A2+, B1, B1+, B2, B2+, C1, C1+, C2 (trong đó các mức có dấu '+' là mức tham chiếu mở rộng phục vụ phân hóa năng lực học sinh, C2 là trình độ thành thạo cao nhất).
 7. Kiến thức trọng tâm: Tập trung xoáy sâu vào nội dung ngữ pháp/từ vựng được chỉ định.
 8. Ghi chú riêng: Đặc biệt lưu ý các yêu cầu phụ của giáo viên (VD: "Tránh dùng từ chuyên ngành", "Đặt câu hỏi liên quan đến chủ đề môi trường", "Bẫy ở mạo từ", v.v.).
 
@@ -38,6 +38,21 @@ Mục tiêu cốt lõi của bạn là:
 - Kỹ năng Nghe (Listening): Bắt buộc cung cấp nội dung câu hỏi và Audio Script (Lời dẫn đầy đủ, tự nhiên, đánh dấu từ khóa dẫn đến câu trả lời).
 - Đọc hiểu: Cung cấp đoạn văn ngắn (Reading passage) phù hợp độ dài và CEFR nếu dạng bài là Đọc hiểu (Reading Comprehension).
 - Đáp án: Luôn kèm theo bảng đáp án (Answer Key) và giải thích sư phạm chi tiết cho từng câu (chỉ rõ tại sao đáp án này đúng và các phương án nhiễu sai ở điểm nào).`;
+
+export const EXTRACTION_SYSTEM_INSTRUCTION = `# Chuyên gia Ngôn ngữ & Sư phạm Tiếng Anh (ELT Pedagogical Specialist)
+
+## Mục tiêu
+Phân tích nguồn học liệu đầu vào (văn bản thô, trích xuất Word DOCX, hoặc OCR hình ảnh/PDF) để chuẩn hóa hồ sơ kiến thức sư phạm:
+1. Xác định chính xác chủ đề bài học và tóm tắt nội dung cốt lõi.
+2. Nhận diện trình độ năng lực CEFR dự kiến theo đúng 12 mức độ: Pre-A1, A1, A1+, A2, A2+, B1, B1+, B2, B2+, C1, C1+, C2 (dựa trên độ phức tạp từ vựng, cú pháp và yêu cầu nhiệm vụ ngôn ngữ).
+3. Trích xuất danh sách từ vựng trọng tâm (từ, từ loại, định nghĩa tiếng Việt ngắn gọn, câu ví dụ ngữ cảnh).
+4. Nhận diện các chủ điểm ngữ pháp trọng tâm (tên chủ điểm, công thức nếu có, quy tắc sư phạm, câu ví dụ).
+5. Đề xuất các chủ điểm trọng tâm nổi bật để phục vụ thiết kế bài tập.
+
+## Yêu cầu chất lượng
+- Tuyệt đối bám sát ngữ liệu cung cấp, không tự ý thêm kiến thức ngoài phạm vi học liệu.
+- Giữ nguyên tính chính xác thuật ngữ và chính tả tiếng Anh.
+- Trả về kết quả JSON chuẩn xác theo đúng cấu trúc yêu cầu.`;
 
 export function getAIClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -83,7 +98,7 @@ export async function extractMaterialsService(params: ExtractMaterialsParams) {
     try {
       const buffer = Buffer.from(fileBase64, 'base64');
       const docResult = await mammoth.extractRawText({ buffer });
-      extractedDocxText = docResult.value || '';
+      extractedDocxText = (docResult.value || '').trim();
     } catch (docxErr) {
       console.warn('Mammoth docx parse warning:', docxErr);
     }
@@ -104,16 +119,20 @@ export async function extractMaterialsService(params: ExtractMaterialsParams) {
       },
     });
     parts.push({
-      text: 'Hãy trích xuất OCR toàn bộ nội dung từ tài liệu/hình ảnh đính kèm một cách chính xác tuyệt đối, không bỏ sót từ vựng hoặc ngữ pháp.',
+      text: 'Trích xuất OCR toàn bộ nội dung từ tài liệu/hình ảnh đính kèm một cách chính xác tuyệt đối, không bỏ sót từ vựng hoặc ngữ pháp.',
     });
   }
 
-  const combinedInput = [
-    text ? `Nội dung nhập từ văn bản:\n${text}` : '',
+  // Clean and normalize combined text to reduce unnecessary token overhead
+  const rawInput = [
+    text ? `Nội dung nhập từ văn bản:\n${text.trim()}` : '',
     extractedDocxText ? `Nội dung trích xuất từ tệp Word (.docx):\n${extractedDocxText}` : '',
   ]
     .filter(Boolean)
     .join('\n\n');
+
+  // Collapse multiple empty lines
+  const combinedInput = rawInput.replace(/\n\s*\n\s*\n+/g, '\n\n');
 
   const extractionPrompt = `
 Hãy phân tích nguồn học liệu sau và trích xuất thông tin sư phạm theo định dạng JSON chuẩn:
@@ -123,7 +142,7 @@ Yêu cầu xuất ra JSON với các trường:
 {
   "title": "Tên chủ đề hoặc bài học",
   "summary": "Tóm tắt ngắn gọn nội dung học liệu",
-  "cefrRecommended": "Pre-A1" | "A1" | "A2" | "B1" | "B2" | "C1",
+  "cefrRecommended": "Pre-A1" | "A1" | "A1+" | "A2" | "A2+" | "B1" | "B1+" | "B2" | "B2+" | "C1" | "C1+" | "C2",
   "vocabulary": [
     {
       "term": "từ hoặc cụm từ tiếng Anh",
@@ -150,8 +169,11 @@ Yêu cầu xuất ra JSON với các trường:
     model: 'gemini-3.8-flash',
     contents: { parts },
     config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: EXTRACTION_SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.LOW,
+      },
     },
   });
 
@@ -196,9 +218,10 @@ QUY TẮC BẮT BUỘC VỀ HÌNH THỨC:
 3. Nếu format là "true_false": Bắt buộc câu hỏi trắc nghiệm True / False với 2 phương án: key "A": "True", key "B": "False" (hoặc thêm "Not Given" nếu là bài đọc hiểu phân loại).
 4. Nếu format là "open_ended": Đây là bài tự luận (điền từ khuyết, chia động từ, viết lại câu, tìm lỗi sai và sửa lại). KHÔNG có options A/B/C/D, correctAnswer là từ/câu trả lời chuẩn xác.
 5. Dạng bài ("exerciseType"): Sử dụng đúng định dạng người dùng đã nhập (VD: "${parameters.map((p: any) => p.exerciseType).join(', ')}").
-6. Nếu là bài Đọc hiểu: Cung cấp đoạn văn "readingPassage" bằng tiếng Anh chuẩn phù hợp với CEFR.
-7. Nếu là bài Nghe: Cung cấp đoạn transcript "audioScript" tự nhiên, kèm speaker cues và đánh dấu từ khóa dẫn đến đáp án.
-8. Mỗi câu hỏi phải có "correctAnswer" và "explanation" (giải thích sư phạm rõ ràng, chỉ rõ tại sao đúng và phương án nhiễu sai ở đâu).
+6. Trình độ CEFR: Tuân thủ mức độ đã chọn từ 12 cấp độ (Pre-A1, A1, A1+, A2, A2+, B1, B1+, B2, B2+, C1, C1+, C2).
+7. Nếu là bài Đọc hiểu: Cung cấp đoạn văn "readingPassage" bằng tiếng Anh chuẩn phù hợp với CEFR.
+8. Nếu là bài Nghe: Cung cấp đoạn transcript "audioScript" tự nhiên, kèm speaker cues và đánh dấu từ khóa dẫn đến đáp án.
+9. Mỗi câu hỏi phải có "correctAnswer" và "explanation" (giải thích sư phạm rõ ràng, chỉ rõ tại sao đúng và phương án nhiễu sai ở đâu).
 
 Định dạng JSON trả về:
 {
@@ -241,6 +264,9 @@ QUY TẮC BẮT BUỘC VỀ HÌNH THỨC:
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.LOW,
+      },
     },
   });
 
@@ -309,6 +335,9 @@ QUY TẮC:
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.LOW,
+      },
     },
   });
 
