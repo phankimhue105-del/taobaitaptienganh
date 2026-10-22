@@ -12,6 +12,7 @@ import {
   Edit,
 } from 'lucide-react';
 import { ExerciseResult } from '../types';
+import { fetchAdjustExercise } from '../utils/apiClient';
 
 interface AdjustmentModalProps {
   isOpen: boolean;
@@ -68,23 +69,13 @@ export const AdjustmentModal: React.FC<AdjustmentModalProps> = ({
     setFeedback(null);
 
     try {
-      const response = await fetch('/api/adjust-exercise', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentExercise: activeExercise,
-          adjustmentCommand: command,
-          targetQuestionNumber: questionNum !== 'all' ? parseInt(questionNum) : undefined,
-          rawMaterial: rawMaterialText,
-        }),
+      const data = await fetchAdjustExercise({
+        currentExercise: activeExercise,
+        adjustmentCommand: command,
+        targetQuestionNumber: questionNum !== 'all' ? parseInt(questionNum) : undefined,
+        rawMaterial: rawMaterialText,
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Lỗi khi điều chỉnh.');
-      }
-
-      const data = await response.json();
       if (data.updatedExercise) {
         onExerciseUpdated(data.updatedExercise, data.adjustmentSummary || 'Đã điều chỉnh thành công.');
         setFeedback(data.adjustmentSummary || 'Đã cập nhật bài tập.');
