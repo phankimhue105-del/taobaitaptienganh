@@ -28,14 +28,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-lg tracking-tight text-slate-900">
-                  EduArchitect
+                  EduGenius
                 </span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                   ELT AI Architect
                 </span>
               </div>
-              <p className="text-xs text-slate-500 hidden sm:block">
-                Chuyên gia Biên soạn Học liệu & Đề thi Tiếng Anh Chuẩn CEFR & Bloom
+              <p className="text-[11px] sm:text-xs text-slate-500 hidden sm:block">
+                Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR & Bloom
               </p>
             </div>
           </div>
