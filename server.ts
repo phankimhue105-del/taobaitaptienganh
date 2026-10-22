@@ -5,6 +5,8 @@ import {
   extractMaterialsService,
   generateExercisesService,
   adjustExerciseService,
+  getGeminiModel,
+  parseAndFormatAIError,
 } from './src/server/aiService.ts';
 
 dotenv.config();
@@ -30,6 +32,7 @@ app.get('/api/health', (_req, res) => {
   return res.json({
     status: 'ok',
     service: 'EduGenius API',
+    model: getGeminiModel(),
     timestamp: new Date().toISOString(),
     geminiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
   });
@@ -43,9 +46,13 @@ app.post('/api/extract-materials', async (req, res) => {
     return res.json(result);
   } catch (error: any) {
     console.error('Error extracting materials:', error);
-    const status = error.message?.includes('Vui lòng') ? 400 : 500;
-    return res.status(status).json({
-      error: error.message || 'Không thể trích xuất học liệu. Vui lòng thử lại.',
+    const formatted = parseAndFormatAIError(error);
+    return res.status(formatted.status).json({
+      error: formatted.message,
+      code: formatted.code,
+      quotaType: formatted.quotaType,
+      model: formatted.model,
+      isDailyQuotaExhausted: formatted.isDailyQuotaExhausted,
     });
   }
 });
@@ -58,9 +65,13 @@ app.post('/api/generate-exercises', async (req, res) => {
     return res.json(result);
   } catch (error: any) {
     console.error('Error generating exercises:', error);
-    const status = error.message?.includes('Chưa có bài tập') ? 400 : 500;
-    return res.status(status).json({
-      error: error.message || 'Lỗi khi biên soạn bài tập. Vui lòng thử lại.',
+    const formatted = parseAndFormatAIError(error);
+    return res.status(formatted.status).json({
+      error: formatted.message,
+      code: formatted.code,
+      quotaType: formatted.quotaType,
+      model: formatted.model,
+      isDailyQuotaExhausted: formatted.isDailyQuotaExhausted,
     });
   }
 });
@@ -78,9 +89,13 @@ app.post('/api/adjust-exercise', async (req, res) => {
     return res.json(result);
   } catch (error: any) {
     console.error('Error adjusting exercise:', error);
-    const status = error.message?.includes('Thiếu dữ liệu') ? 400 : 500;
-    return res.status(status).json({
-      error: error.message || 'Lỗi khi điều chỉnh bài tập.',
+    const formatted = parseAndFormatAIError(error);
+    return res.status(formatted.status).json({
+      error: formatted.message,
+      code: formatted.code,
+      quotaType: formatted.quotaType,
+      model: formatted.model,
+      isDailyQuotaExhausted: formatted.isDailyQuotaExhausted,
     });
   }
 });
