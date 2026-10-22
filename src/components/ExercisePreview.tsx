@@ -16,6 +16,8 @@ import {
   HelpCircle,
   Eye,
   GraduationCap,
+  Save,
+  Bookmark,
 } from 'lucide-react';
 import { ExerciseResult, QuestionItem } from '../types';
 
@@ -24,7 +26,9 @@ interface ExercisePreviewProps {
   onComplete: () => void;
   onOpenAdjustment: (exerciseId?: string, questionNumber?: number) => void;
   onUpdateQuestion: (exerciseId: string, questionId: string, updated: Partial<QuestionItem>) => void;
+  onUpdateExercise?: (exerciseId: string, updated: Partial<ExerciseResult>) => void;
   onExportWord: () => void;
+  onSaveExam?: () => void;
 }
 
 export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
@@ -32,7 +36,9 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
   onComplete,
   onOpenAdjustment,
   onUpdateQuestion,
+  onUpdateExercise,
   onExportWord,
+  onSaveExam,
 }) => {
   const [viewMode, setViewMode] = useState<'student' | 'teacher' | 'script' | 'matrix'>('teacher');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -159,13 +165,24 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
           </button>
 
           {/* Sư phạm: 2 Nút cốt lõi theo System Instruction */}
+          {onSaveExam && (
+            <button
+              onClick={onSaveExam}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition shadow-2xs"
+              title="Lưu đề thi này vào máy (0đ) để mở lại sau mà không cần gọi AI"
+            >
+              <Save className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Lưu đề (0đ)</span>
+            </button>
+          )}
+
           <button
             onClick={() => onOpenAdjustment()}
             className="flex items-center space-x-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300 transition shadow-2xs"
-            title="Giữ nguyên khung dữ liệu và điều chỉnh tham số"
+            title="Giữ nguyên khung dữ liệu và điều chỉnh tham số bằng AI"
           >
             <Sliders className="w-3.5 h-3.5 text-amber-700" />
-            <span>Điều chỉnh</span>
+            <span>AI Điều chỉnh</span>
           </button>
 
           <button
@@ -272,100 +289,204 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
                 return (
                   <div
                     key={q.id || q.number}
-                    className="p-3.5 rounded-xl hover:bg-slate-50/70 transition border border-transparent hover:border-slate-200 relative group"
+                    className={`p-3.5 rounded-2xl transition border ${
+                      isEditing
+                        ? 'bg-blue-50/50 border-blue-300 shadow-xs'
+                        : 'hover:bg-slate-50/70 border-transparent hover:border-slate-200'
+                    } relative group`}
                   >
-                    {/* Prompt */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start space-x-2 text-xs sm:text-sm text-slate-900 font-medium">
-                        <span className="font-bold text-blue-700">{q.number}.</span>
-                        {isEditing ? (
-                          <input
-                            type="text"
+                    {isEditing ? (
+                      /* Full Direct Inline Editor (0 AI calls - 0đ) */
+                      <div className="space-y-3 animate-in fade-in duration-150">
+                        <div className="flex items-center justify-between text-xs font-bold text-blue-900 border-b border-blue-200/80 pb-2">
+                          <span className="flex items-center space-x-1.5">
+                            <Edit3 className="w-4 h-4 text-blue-600" />
+                            <span>Chỉnh sửa thủ công Câu {q.number} (Lưu trực tiếp • 0 token AI)</span>
+                          </span>
+                          <button
+                            onClick={() => setEditingQuestionId(null)}
+                            className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg font-semibold transition shadow-xs"
+                          >
+                            Xong & Đóng
+                          </button>
+                        </div>
+
+                        {/* Prompt Input */}
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                            Nội dung câu hỏi (Prompt):
+                          </label>
+                          <textarea
+                            rows={2}
                             value={q.prompt}
                             onChange={(e) =>
                               onUpdateQuestion(ex.id, q.id, { prompt: e.target.value })
                             }
-                            className="w-full px-2 py-1 text-xs border border-blue-400 rounded-md bg-white"
+                            className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
-                        ) : (
-                          <span>{q.prompt}</span>
-                        )}
-                      </div>
-
-                      {/* Quick Edit Trigger */}
-                      <div className="opacity-0 group-hover:opacity-100 transition flex items-center space-x-1">
-                        <button
-                          onClick={() =>
-                            setEditingQuestionId(isEditing ? null : q.id)
-                          }
-                          className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-white text-[11px] flex items-center space-x-1"
-                          title="Sửa nhanh câu hỏi"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          <span>{isEditing ? 'Xong' : 'Sửa'}</span>
-                        </button>
-                        <button
-                          onClick={() => onOpenAdjustment(ex.id, q.number)}
-                          className="p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-white text-[11px] flex items-center space-x-1"
-                          title="Yêu cầu AI điều chỉnh riêng câu này"
-                        >
-                          <Sparkles className="w-3 h-3 text-amber-500" />
-                          <span>AI chỉnh câu</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Options if Multiple Choice */}
-                    {q.options && q.options.length > 0 && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2.5 text-xs text-slate-700 pl-5">
-                        {q.options.map((opt) => {
-                          const isCorrect =
-                            viewMode === 'teacher' &&
-                            (q.correctAnswer.startsWith(opt.key) ||
-                              q.correctAnswer.includes(` ${opt.key}.`) ||
-                              q.correctAnswer === opt.key);
-
-                          return (
-                            <div
-                              key={opt.key}
-                              className={`p-2 rounded-lg border transition ${
-                                isCorrect
-                                  ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-800'
-                                  : 'bg-white border-slate-200'
-                              }`}
-                            >
-                              <span className="font-bold mr-1">{opt.key}.</span>
-                              <span>{opt.text}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Open Ended response line for student view */}
-                    {(!q.options || q.options.length === 0) && viewMode === 'student' && (
-                      <div className="mt-2 text-xs text-slate-400 italic pl-5">
-                        Answer: __________________________________________________________________
-                      </div>
-                    )}
-
-                    {/* Teacher Explanation & Correct Answer */}
-                    {viewMode === 'teacher' && (
-                      <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-xs space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-extrabold text-emerald-800">
-                            Đáp án: {q.correctAnswer}
-                          </span>
-                          {q.cognitiveTag && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
-                              Bloom: {q.cognitiveTag}
-                            </span>
-                          )}
                         </div>
-                        <p className="text-slate-700 text-[11px] leading-relaxed">
-                          <strong className="text-slate-900">Giải thích:</strong> {q.explanation}
-                        </p>
+
+                        {/* Options if Multiple Choice */}
+                        {q.options && q.options.length > 0 && (
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-semibold text-slate-700 block">
+                              Các phương án lựa chọn:
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {q.options.map((opt) => (
+                                <div key={opt.key} className="flex items-center space-x-1.5">
+                                  <span className="font-bold text-xs text-blue-800 w-5 text-right shrink-0">
+                                    {opt.key}.
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={opt.text}
+                                    onChange={(e) => {
+                                      const updatedOpts = q.options!.map((o) =>
+                                        o.key === opt.key ? { ...o, text: e.target.value } : o
+                                      );
+                                      onUpdateQuestion(ex.id, q.id, { options: updatedOpts });
+                                    }}
+                                    className="flex-1 px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Correct Answer & Bloom Tag */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                              Đáp án đúng:
+                            </label>
+                            <input
+                              type="text"
+                              value={q.correctAnswer}
+                              onChange={(e) =>
+                                onUpdateQuestion(ex.id, q.id, { correctAnswer: e.target.value })
+                              }
+                              placeholder="VD: A. Phương án đúng"
+                              className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white font-medium text-emerald-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                              Mức độ Bloom:
+                            </label>
+                            <input
+                              type="text"
+                              value={q.cognitiveTag || ''}
+                              onChange={(e) =>
+                                onUpdateQuestion(ex.id, q.id, { cognitiveTag: e.target.value as any })
+                              }
+                              placeholder="Nhận biết / Thông hiểu / Vận dụng"
+                              className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Explanation */}
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                            Giải thích sư phạm:
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={q.explanation}
+                            onChange={(e) =>
+                              onUpdateQuestion(ex.id, q.id, { explanation: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
                       </div>
+                    ) : (
+                      /* Normal Display Mode */
+                      <>
+                        {/* Prompt */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start space-x-2 text-xs sm:text-sm text-slate-900 font-medium">
+                            <span className="font-bold text-blue-700">{q.number}.</span>
+                            <span>{q.prompt}</span>
+                          </div>
+
+                          {/* Quick Edit Trigger */}
+                          <div className="opacity-0 group-hover:opacity-100 transition flex items-center space-x-1">
+                            <button
+                              onClick={() => setEditingQuestionId(q.id)}
+                              className="px-2 py-0.8 rounded-lg text-slate-600 hover:text-blue-700 hover:bg-blue-50 text-[11px] font-semibold flex items-center space-x-1 border border-slate-200 bg-white shadow-2xs"
+                              title="Chỉnh sửa câu hỏi, đáp án, giải thích trực tiếp (0 token AI)"
+                            >
+                              <Edit3 className="w-3 h-3 text-blue-600" />
+                              <span>Sửa trực tiếp (0đ)</span>
+                            </button>
+                            <button
+                              onClick={() => onOpenAdjustment(ex.id, q.number)}
+                              className="px-2 py-0.8 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-50 text-[11px] font-semibold flex items-center space-x-1 border border-slate-200 bg-white shadow-2xs"
+                              title="Yêu cầu AI viết lại hoặc nâng độ khó câu này"
+                            >
+                              <Sparkles className="w-3 h-3 text-amber-500" />
+                              <span>AI chỉnh câu</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Options if Multiple Choice */}
+                        {q.options && q.options.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2.5 text-xs text-slate-700 pl-5">
+                            {q.options.map((opt) => {
+                              const isCorrect =
+                                viewMode === 'teacher' &&
+                                (q.correctAnswer.startsWith(opt.key) ||
+                                  q.correctAnswer.includes(` ${opt.key}.`) ||
+                                  q.correctAnswer === opt.key);
+
+                              return (
+                                <div
+                                  key={opt.key}
+                                  className={`p-2 rounded-lg border transition ${
+                                    isCorrect
+                                      ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-800'
+                                      : 'bg-white border-slate-200'
+                                  }`}
+                                >
+                                  <span className="font-bold mr-1">{opt.key}.</span>
+                                  <span>{opt.text}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Open Ended response line for student view */}
+                        {(!q.options || q.options.length === 0) && viewMode === 'student' && (
+                          <div className="mt-2 text-xs text-slate-400 italic pl-5">
+                            Answer: __________________________________________________________________
+                          </div>
+                        )}
+
+                        {/* Teacher Explanation & Correct Answer */}
+                        {viewMode === 'teacher' && (
+                          <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-xs space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-extrabold text-emerald-800">
+                                Đáp án: {q.correctAnswer}
+                              </span>
+                              {q.cognitiveTag && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                                  Bloom: {q.cognitiveTag}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-slate-700 text-[11px] leading-relaxed">
+                              <strong className="text-slate-900">Giải thích:</strong> {q.explanation}
+                            </p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
@@ -420,12 +541,22 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          {onSaveExam && (
+            <button
+              onClick={onSaveExam}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition border border-white/20"
+              title="Lưu đề thi này vào máy để mở lại sau mà không cần gọi AI"
+            >
+              <Save className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Lưu đề (0đ)</span>
+            </button>
+          )}
           <button
             onClick={() => onOpenAdjustment()}
             className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition shadow-md"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Điều chỉnh</span>
+            <span>AI Điều chỉnh</span>
           </button>
           <button
             onClick={onExportWord}
