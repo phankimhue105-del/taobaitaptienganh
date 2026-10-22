@@ -29,7 +29,7 @@ app.use(express.urlencoded({ extended: true, limit: '35mb' }));
 app.get('/api/health', (_req, res) => {
   return res.json({
     status: 'ok',
-    service: 'EduArchitect API',
+    service: 'EduGenius API',
     timestamp: new Date().toISOString(),
     geminiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
   });
@@ -106,7 +106,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`EduArchitect Server running on port ${PORT} on 0.0.0.0`);
+    console.log(`EduGenius Server running on port ${PORT} on 0.0.0.0`);
   });
 }
 
