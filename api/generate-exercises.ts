@@ -1,4 +1,4 @@
-import { generateExercisesService } from '../src/server/aiService.ts';
+import { generateExercisesService, parseAndFormatAIError } from '../src/server/aiService.ts';
 
 export const config = {
   api: {
@@ -27,9 +27,13 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(result);
   } catch (error: any) {
     console.error('Vercel API error in generate-exercises:', error);
-    const status = error.message?.includes('Chưa có bài tập') ? 400 : 500;
-    return res.status(status).json({
-      error: error.message || 'Lỗi khi biên soạn bài tập.',
+    const formatted = parseAndFormatAIError(error);
+    return res.status(formatted.status).json({
+      error: formatted.message,
+      code: formatted.code,
+      quotaType: formatted.quotaType,
+      model: formatted.model,
+      isDailyQuotaExhausted: formatted.isDailyQuotaExhausted,
     });
   }
 }
