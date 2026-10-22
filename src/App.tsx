@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { MaterialInputSection } from './components/MaterialInputSection';
 import { ExerciseConfigMatrix } from './components/ExerciseConfigMatrix';
 import { ExercisePreview } from './components/ExercisePreview';
 import { AdjustmentModal } from './components/AdjustmentModal';
 import { ExportWordModal } from './components/ExportWordModal';
+import { SavedExamsModal } from './components/SavedExamsModal';
 import { SAMPLE_MATERIALS } from './data/sampleData';
 import {
   ExerciseParameter,
@@ -12,9 +13,18 @@ import {
   ExtractedMaterial,
   QuestionItem,
   CefrLevel,
+  SavedExam,
 } from './types';
 import { CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { fetchGenerateExercises } from './utils/apiClient';
+import {
+  computeStringHash,
+  computeExerciseSignature,
+  getCachedExercises,
+  setCachedExercises,
+  saveExamToStorage,
+  getSavedExams,
+} from './utils/storage';
 
 export default function App() {
   const [activeStep, setActiveStep] = useState<number>(1);
@@ -36,7 +46,13 @@ export default function App() {
     questionNumber?: number;
   }>({});
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isSavedExamsOpen, setIsSavedExamsOpen] = useState(false);
+  const [savedExamsCount, setSavedExamsCount] = useState<number>(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSavedExamsCount(getSavedExams().length);
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -101,6 +117,22 @@ export default function App() {
     setIsGenerating(true);
     setGenerateError(null);
 
+    // Tính toán chữ ký bài tập để kiểm tra cache (Tối ưu 0đ)
+    const materialSig = computeStringHash(
+      `${rawText.trim()}__${extractedMaterial?.title || ''}__${extractedMaterial?.vocabulary?.length || 0}`
+    );
+    const exerciseSig = computeExerciseSignature(materialSig, parameters);
+
+    // 1. Kiểm tra cache đề thi đã sinh trước đó
+    const cached = getCachedExercises(exerciseSig);
+    if (cached && cached.length > 0) {
+      setExercises(cached);
+      setActiveStep(3);
+      setIsGenerating(false);
+      showToast('Đã nạp lại đề thi từ bộ nhớ đệm (0 lượt gọi AI)!');
+      return;
+    }
+
     try {
       const data = await fetchGenerateExercises({
         rawMaterial: rawText,
@@ -113,6 +145,7 @@ export default function App() {
       }
 
       setExercises(data.exercises);
+      setCachedExercises(exerciseSig, data.exercises);
       setActiveStep(3);
       showToast('Đã biên soạn học liệu thành công!');
     } catch (err: any) {
@@ -133,6 +166,38 @@ export default function App() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleSaveExam = () => {
+    if (exercises.length === 0) return;
+    const saved = saveExamToStorage({
+      title: extractedMaterial?.title,
+      rawText,
+      extractedMaterial,
+      parameters,
+      exercises,
+    });
+    setSavedExamsCount(getSavedExams().length);
+    showToast(`Đã lưu "${saved.title}" vào kho đề thi (0đ)!`);
+  };
+
+  const handleLoadExam = (exam: SavedExam) => {
+    setRawText(exam.rawText || '');
+    setExtractedMaterial(exam.extractedMaterial);
+    setParameters(exam.parameters || []);
+    setExercises(exam.exercises || []);
+    setActiveStep(3);
+    showToast(`Đã mở đề thi "${exam.title}" (0 lượt gọi AI - 0đ)`);
+  };
+
+  const handleUpdateExercise = (
+    exerciseId: string,
+    updated: Partial<ExerciseResult>
+  ) => {
+    setExercises((prev) =>
+      prev.map((ex) => (ex.id === exerciseId ? { ...ex, ...updated } : ex))
+    );
+    showToast('Đã lưu thay đổi bài tập.');
   };
 
   const handleOpenAdjustment = (exerciseId?: string, questionNumber?: number) => {
@@ -185,6 +250,8 @@ export default function App() {
         activeStep={activeStep}
         setActiveStep={setActiveStep}
         hasExercises={exercises.length > 0}
+        onOpenSavedExams={() => setIsSavedExamsOpen(true)}
+        savedCount={savedExamsCount}
       />
 
       {/* Main Content Area */}
@@ -258,10 +325,22 @@ export default function App() {
             onComplete={() => setIsExportModalOpen(true)}
             onOpenAdjustment={handleOpenAdjustment}
             onUpdateQuestion={handleUpdateQuestion}
+            onUpdateExercise={handleUpdateExercise}
             onExportWord={() => setIsExportModalOpen(true)}
+            onSaveExam={handleSaveExam}
           />
         )}
       </main>
+
+      {/* Saved Exams Modal (Mở đề đã lưu & Nhập file JSON - 0 AI calls) */}
+      <SavedExamsModal
+        isOpen={isSavedExamsOpen}
+        onClose={() => {
+          setIsSavedExamsOpen(false);
+          setSavedExamsCount(getSavedExams().length);
+        }}
+        onLoadExam={handleLoadExam}
+      />
 
       {/* Adjustment Modal ("Điều chỉnh" mechanism) */}
       <AdjustmentModal
