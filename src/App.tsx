@@ -5,7 +5,8 @@ import { ExerciseConfigMatrix } from './components/ExerciseConfigMatrix';
 import { ExercisePreview } from './components/ExercisePreview';
 import { AdjustmentModal } from './components/AdjustmentModal';
 import { ExportWordModal } from './components/ExportWordModal';
-import { SavedExamsModal } from './components/SavedExamsModal';
+import { SavedTemplatesModal } from './components/SavedTemplatesModal';
+import { SaveTemplateMiniModal } from './components/SaveTemplateMiniModal';
 import { SAMPLE_MATERIALS } from './data/sampleData';
 import {
   ExerciseParameter,
@@ -13,7 +14,6 @@ import {
   ExtractedMaterial,
   QuestionItem,
   CefrLevel,
-  SavedExam,
 } from './types';
 import { CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { fetchGenerateExercises } from './utils/apiClient';
@@ -22,8 +22,7 @@ import {
   computeExerciseSignature,
   getCachedExercises,
   setCachedExercises,
-  saveExamToStorage,
-  getSavedExams,
+  getSavedTemplates,
 } from './utils/storage';
 import { validateAndFixMcqBalance } from './utils/mcqQuality';
 
@@ -47,18 +46,24 @@ export default function App() {
     questionNumber?: number;
   }>({});
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isSavedExamsOpen, setIsSavedExamsOpen] = useState(false);
-  const [savedExamsCount, setSavedExamsCount] = useState<number>(0);
+
+  // Template modals
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
+  const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
+  const [templateCount, setTemplateCount] = useState<number>(0);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setSavedExamsCount(getSavedExams().length);
+    setTemplateCount(getSavedTemplates().length);
   }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  const refreshTemplateCount = () => setTemplateCount(getSavedTemplates().length);
 
   const handleLoadSample = (sampleId: string) => {
     const sample = SAMPLE_MATERIALS.find((s) => s.id === sampleId);
@@ -114,17 +119,15 @@ export default function App() {
   };
 
   const handleGenerateExercises = async () => {
-    if (isGenerating) return; // Prevent duplicate concurrent requests
+    if (isGenerating) return;
     setIsGenerating(true);
     setGenerateError(null);
 
-    // Tính toán chữ ký bài tập để kiểm tra cache (Tối ưu 0đ)
     const materialSig = computeStringHash(
       `${rawText.trim()}__${extractedMaterial?.title || ''}__${extractedMaterial?.vocabulary?.length || 0}`
     );
     const exerciseSig = computeExerciseSignature(materialSig, parameters);
 
-    // 1. Kiểm tra cache đề thi đã sinh trước đó
     const cached = getCachedExercises(exerciseSig);
     if (cached && cached.length > 0) {
       setExercises(cached);
@@ -172,27 +175,31 @@ export default function App() {
     }
   };
 
-  const handleSaveExam = () => {
-    if (exercises.length === 0) return;
-    const saved = saveExamToStorage({
-      title: extractedMaterial?.title,
-      rawText,
-      extractedMaterial,
-      parameters,
-      exercises,
-    });
-    setSavedExamsCount(getSavedExams().length);
-    showToast(`Đã lưu "${saved.title}" vào kho đề thi (0đ)!`);
+  // ── Template handlers (0 AI calls) ────────────────────────────────────────
+
+  /** Mở modal "Lưu mẫu" – chỉ khi đang ở bước 2 hoặc 3 và có parameters */
+  const handleOpenSaveTemplate = () => {
+    if (parameters.length === 0) {
+      showToast('Chưa có cấu hình bài tập nào để lưu. Hãy thêm bài tập ở Bước 2.');
+      return;
+    }
+    setIsSaveTemplateModalOpen(true);
   };
 
-  const handleLoadExam = (exam: SavedExam) => {
-    setRawText(exam.rawText || '');
-    setExtractedMaterial(exam.extractedMaterial);
-    setParameters(exam.parameters || []);
-    setExercises(exam.exercises || []);
-    setActiveStep(3);
-    showToast(`Đã mở đề thi "${exam.title}" (0 lượt gọi AI - 0đ)`);
+  /** Callback sau khi lưu mẫu thành công */
+  const handleTemplateSaved = (templateName: string) => {
+    refreshTemplateCount();
+    showToast(`Đã lưu mẫu "${templateName}" vào thư viện (0đ)!`);
   };
+
+  /** Áp dụng mẫu: điền parameters vào bước 2, không gọi AI */
+  const handleUseTemplate = (freshParams: ExerciseParameter[]) => {
+    setParameters(freshParams);
+    setActiveStep(2);
+    showToast(`Đã áp dụng mẫu vào Bước 2. Kiểm tra lại tham số và nhấn "Biên soạn đề" khi sẵn sàng.`);
+  };
+
+  // ── Exercise editing ───────────────────────────────────────────────────────
 
   const handleUpdateExercise = (
     exerciseId: string,
@@ -254,8 +261,8 @@ export default function App() {
         activeStep={activeStep}
         setActiveStep={setActiveStep}
         hasExercises={exercises.length > 0}
-        onOpenSavedExams={() => setIsSavedExamsOpen(true)}
-        savedCount={savedExamsCount}
+        onOpenTemplates={() => setIsTemplatesModalOpen(true)}
+        templateCount={templateCount}
       />
 
       {/* Main Content Area */}
@@ -331,22 +338,30 @@ export default function App() {
             onUpdateQuestion={handleUpdateQuestion}
             onUpdateExercise={handleUpdateExercise}
             onExportWord={() => setIsExportModalOpen(true)}
-            onSaveExam={handleSaveExam}
+            onSaveTemplate={handleOpenSaveTemplate}
           />
         )}
       </main>
 
-      {/* Saved Exams Modal (Mở đề đã lưu & Nhập file JSON - 0 AI calls) */}
-      <SavedExamsModal
-        isOpen={isSavedExamsOpen}
+      {/* Saved Templates Modal */}
+      <SavedTemplatesModal
+        isOpen={isTemplatesModalOpen}
         onClose={() => {
-          setIsSavedExamsOpen(false);
-          setSavedExamsCount(getSavedExams().length);
+          setIsTemplatesModalOpen(false);
+          refreshTemplateCount();
         }}
-        onLoadExam={handleLoadExam}
+        onUseTemplate={handleUseTemplate}
       />
 
-      {/* Adjustment Modal ("Điều chỉnh" mechanism) */}
+      {/* Save Template Mini Modal */}
+      <SaveTemplateMiniModal
+        isOpen={isSaveTemplateModalOpen}
+        onClose={() => setIsSaveTemplateModalOpen(false)}
+        parameters={parameters}
+        onSaved={handleTemplateSaved}
+      />
+
+      {/* Adjustment Modal */}
       <AdjustmentModal
         isOpen={isAdjustmentModalOpen}
         onClose={() => setIsAdjustmentModalOpen(false)}
@@ -357,7 +372,7 @@ export default function App() {
         onExerciseUpdated={handleExerciseUpdated}
       />
 
-      {/* Export Word Modal ("Hoàn tất" mechanism) */}
+      {/* Export Word Modal */}
       <ExportWordModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
@@ -368,7 +383,7 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200/80 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© {new Date().getFullYear()} EduGenius • Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR & Bloom</p>
+          <p>© {new Date().getFullYear()} EduGenius • Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR &amp; Bloom</p>
           <div className="flex items-center space-x-4 text-slate-400">
             <span>Khung CEFR Pre-A1 - C2</span>
             <span>•</span>
