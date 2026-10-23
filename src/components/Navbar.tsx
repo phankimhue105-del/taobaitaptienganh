@@ -1,5 +1,5 @@
 import React from 'react';
-import { GraduationCap, FileText, Sparkles, BookOpen, Layers, FolderOpen, RotateCcw } from 'lucide-react';
+import { GraduationCap, FileText, Sparkles, BookOpen, Layers, Bookmark, RotateCcw } from 'lucide-react';
 
 interface NavbarProps {
   onLoadSample: (sampleId: string) => void;
@@ -7,8 +7,8 @@ interface NavbarProps {
   activeStep: number;
   setActiveStep: (step: number) => void;
   hasExercises: boolean;
-  onOpenSavedExams?: () => void;
-  savedCount?: number;
+  onOpenTemplates?: () => void;
+  templateCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -17,8 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeStep,
   setActiveStep,
   hasExercises,
-  onOpenSavedExams,
-  savedCount = 0,
+  onOpenTemplates,
+  templateCount = 0,
 }) => {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-500 hidden sm:block">
-                Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR & Bloom
+                Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR &amp; Bloom
               </p>
             </div>
           </div>
@@ -80,35 +80,37 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>3. Xem trước & Tinh chỉnh</span>
+              <span>3. Xem trước &amp; Tinh chỉnh</span>
               {hasExercises && (
                 <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
               )}
             </button>
           </div>
 
-          {/* Actions & Samples */}
+          {/* Actions */}
           <div className="flex items-center space-x-2">
-            {onOpenSavedExams && (
+            {/* Mẫu đề đã lưu – thay thế cho "Đề đã lưu" cũ */}
+            {onOpenTemplates && (
               <button
-                onClick={onOpenSavedExams}
+                onClick={onOpenTemplates}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition shadow-2xs relative"
-                title="Mở danh sách các đề thi đã lưu trên máy (0đ)"
+                title="Mở thư viện mẫu cấu hình bài tập đã lưu (0 lượt gọi AI)"
               >
-                <FolderOpen className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Đề đã lưu</span>
-                {savedCount > 0 && (
+                <Bookmark className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Mẫu đề đã lưu</span>
+                {templateCount > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold">
-                    {savedCount}
+                    {templateCount}
                   </span>
                 )}
               </button>
             )}
 
+            {/* Mẫu đề có sẵn (hệ thống) – giữ nguyên, chỉ đổi nhãn */}
             <div className="relative group">
               <button className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition shadow-2xs">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Mẫu đề có sẵn</span>
+                <span>Mẫu tài liệu thử nghiệm</span>
               </button>
               <div className="absolute right-0 mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 hidden group-hover:block transition-all animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -125,14 +127,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={() => onLoadSample('sample-2')}
                   className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 text-slate-700 hover:text-blue-700 flex flex-col"
                 >
-                  <span className="font-semibold">Environment & Green Living</span>
-                  <span className="text-[11px] text-slate-500">CEFR B2 • Conditionals & Passive • 2 bài tập</span>
+                  <span className="font-semibold">Environment &amp; Green Living</span>
+                  <span className="text-[11px] text-slate-500">CEFR B2 • Conditionals &amp; Passive • 2 bài tập</span>
                 </button>
                 <button
                   onClick={() => onLoadSample('sample-3')}
                   className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 text-slate-700 hover:text-blue-700 flex flex-col"
                 >
-                  <span className="font-semibold">Daily Routines & Hobbies</span>
+                  <span className="font-semibold">Daily Routines &amp; Hobbies</span>
                   <span className="text-[11px] text-slate-500">CEFR A2 • Present Simple • 2 bài tập</span>
                 </button>
               </div>
