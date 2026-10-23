@@ -25,6 +25,7 @@ import {
   saveExamToStorage,
   getSavedExams,
 } from './utils/storage';
+import { validateAndFixMcqBalance } from './utils/mcqQuality';
 
 export default function App() {
   const [activeStep, setActiveStep] = useState<number>(1);
@@ -144,10 +145,13 @@ export default function App() {
         throw new Error('AI không thể tạo danh sách bài tập. Vui lòng kiểm tra lại tham số.');
       }
 
-      setExercises(data.exercises);
-      setCachedExercises(exerciseSig, data.exercises);
+      // Kiểm tra & cân bằng phân bổ đáp án A/B/C/D (0 AI calls)
+      const { exercises: validatedExercises, report } = validateAndFixMcqBalance(data.exercises);
+
+      setExercises(validatedExercises);
+      setCachedExercises(exerciseSig, validatedExercises);
       setActiveStep(3);
-      showToast('Đã biên soạn học liệu thành công!');
+      showToast(`Đã biên soạn xong! ${report.summary}`);
     } catch (err: any) {
       console.error(err);
       const isQuota =
@@ -358,6 +362,7 @@ export default function App() {
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         exercises={exercises}
+        parameters={parameters}
       />
 
       {/* Footer */}
