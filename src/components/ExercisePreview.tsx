@@ -28,7 +28,8 @@ interface ExercisePreviewProps {
   onUpdateQuestion: (exerciseId: string, questionId: string, updated: Partial<QuestionItem>) => void;
   onUpdateExercise?: (exerciseId: string, updated: Partial<ExerciseResult>) => void;
   onExportWord: () => void;
-  onSaveExam?: () => void;
+  /** Lưu mẫu cấu hình (0 AI calls) */
+  onSaveTemplate?: () => void;
 }
 
 export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
@@ -38,7 +39,7 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
   onUpdateQuestion,
   onUpdateExercise,
   onExportWord,
-  onSaveExam,
+  onSaveTemplate,
 }) => {
   const [viewMode, setViewMode] = useState<'student' | 'teacher' | 'script' | 'matrix'>('teacher');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -164,15 +165,15 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
             <span>In ấn</span>
           </button>
 
-          {/* Sư phạm: 2 Nút cốt lõi theo System Instruction */}
-          {onSaveExam && (
+          {/* Lưu mẫu cấu hình (0 AI calls) */}
+          {onSaveTemplate && (
             <button
-              onClick={onSaveExam}
+              onClick={onSaveTemplate}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition shadow-2xs"
-              title="Lưu đề thi này vào máy (0đ) để mở lại sau mà không cần gọi AI"
+              title="Lưu cấu hình bài tập thành mẫu để tái sử dụng (0 AI calls)"
             >
-              <Save className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Lưu đề (0đ)</span>
+              <Bookmark className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Lưu mẫu</span>
             </button>
           )}
 
@@ -541,14 +542,14 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          {onSaveExam && (
+          {onSaveTemplate && (
             <button
-              onClick={onSaveExam}
+              onClick={onSaveTemplate}
               className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition border border-white/20"
-              title="Lưu đề thi này vào máy để mở lại sau mà không cần gọi AI"
+              title="Lưu cấu hình bài tập thành mẫu (0 AI calls)"
             >
-              <Save className="w-3.5 h-3.5 text-indigo-300" />
-              <span>Lưu đề (0đ)</span>
+              <Bookmark className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Lưu mẫu</span>
             </button>
           )}
           <button
