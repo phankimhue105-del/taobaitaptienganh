@@ -9,20 +9,24 @@ import {
   Check,
   Loader2,
   GraduationCap,
+  Table2,
 } from 'lucide-react';
-import { ExerciseResult, ExamHeaderInfo } from '../types';
+import { ExerciseResult, ExamHeaderInfo, ExerciseParameter } from '../types';
 import { generateWordDocument } from '../utils/docxExport';
+import { generateMatrixDocument } from '../utils/matrixExport';
 
 interface ExportWordModalProps {
   isOpen: boolean;
   onClose: () => void;
   exercises: ExerciseResult[];
+  parameters?: ExerciseParameter[];
 }
 
 export const ExportWordModal: React.FC<ExportWordModalProps> = ({
   isOpen,
   onClose,
   exercises,
+  parameters = [],
 }) => {
   const [headerInfo, setHeaderInfo] = useState<ExamHeaderInfo>({
     schoolName: 'TRƯỜNG THPT CHUYÊN HÀ NỘI - AMSTERDAM',
@@ -38,6 +42,7 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
   const [includeExplanations, setIncludeExplanations] = useState(true);
   const [includeAudioScript, setIncludeAudioScript] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingMatrix, setIsExportingMatrix] = useState(false);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -52,7 +57,6 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
         includeAudioScript,
       });
 
-      // Trigger download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -72,12 +76,36 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
     }
   };
 
+  const handleDownloadMatrix = async () => {
+    setIsExportingMatrix(true);
+    try {
+      const blob = await generateMatrixDocument(exercises, parameters, headerInfo);
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cleanTitle = (headerInfo.testTitle || 'Ma_Tran')
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9_]/g, '');
+      a.download = `MaTran_${cleanTitle}_EduGenius.docx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Error exporting Matrix DOCX:', err);
+      alert('Có lỗi khi tạo file Ma trận. Vui lòng thử lại.');
+    } finally {
+      setIsExportingMatrix(false);
+    }
+  };
+
   const handleCopyHtml = () => {
     // Generate clean HTML string suitable for clipboard pasting into Word
     let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head><meta charset='utf-8'><title>${headerInfo.testTitle}</title>
     <style>
-      body { font-family: 'Times New Roman', serif; font-size: 12pt; }
+      body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.15; }
       h2 { color: #1e3a8a; font-size: 14pt; margin-top: 15pt; }
       .meta { font-style: italic; color: #4b5563; }
       .box { background: #f8fafc; border-left: 3pt solid #3b82f6; padding: 6pt; margin: 6pt 0; }
@@ -89,22 +117,22 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
     html += `<div style="display:flex; justify-content:space-between; border-bottom: 2pt solid #2563eb; padding-bottom: 6pt; margin-bottom: 12pt;">
       <div>
         <strong>${headerInfo.schoolName.toUpperCase()}</strong><br/>
-        Subject: ${headerInfo.subject}<br/>
-        Class: ${headerInfo.gradeOrClass} | Year: ${headerInfo.academicYear}<br/>
-        Teacher: ${headerInfo.teacherName}
+        Môn: ${headerInfo.subject}<br/>
+        Lớp: ${headerInfo.gradeOrClass} | Năm học: ${headerInfo.academicYear}<br/>
+        Giáo viên: ${headerInfo.teacherName}
       </div>
       <div style="text-align:right;">
         <strong>${headerInfo.testTitle.toUpperCase()}</strong><br/>
-        Time allowed: ${headerInfo.durationMinutes} minutes<br/>
-        Student Name: _______________________<br/>
-        Class: ___________ | Date: ____________
+        Thời gian: ${headerInfo.durationMinutes} phút<br/>
+        Họ và tên: _______________________<br/>
+        Lớp: ___________ | Ngày: ____________
       </div>
     </div>`;
 
     exercises.forEach((ex) => {
       html += `<h2>${ex.title}</h2>`;
-      html += `<p class="meta">[Level: ${ex.cefrLevel} | Bloom: ${ex.cognitiveLevel} | Focus: ${ex.focus}]</p>`;
-      html += `<p><strong>Instruction:</strong> ${ex.instruction}</p>`;
+      html += `<p class="meta">[CEFR: ${ex.cefrLevel} | Bloom: ${ex.cognitiveLevel} | Trọng tâm: ${ex.focus}]</p>`;
+      html += `<p><strong>Hướng dẫn:</strong> ${ex.instruction}</p>`;
 
       if (ex.readingPassage) {
         html += `<div class="box"><strong>Reading Passage:</strong><br/>${ex.readingPassage.replace(/\n/g, '<br/>')}</div>`;
@@ -128,7 +156,7 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
     });
 
     if (includeAnswerKey) {
-      html += `<h2 style="color: #047857; text-align: center; border-top: 2pt dashed #10b981; padding-top: 15pt; margin-top: 25pt;">ANSWER KEY & TEACHER NOTES</h2>`;
+      html += `<h2 style="color: #047857; text-align: center; border-top: 2pt dashed #10b981; padding-top: 15pt; margin-top: 25pt;">BẢNG ĐÁP ÁN & HƯỚNG DẪN CHẤM</h2>`;
       exercises.forEach((ex) => {
         html += `<h3>${ex.title}</h3><table><tr>`;
         ex.questions.forEach((q) => {
@@ -138,7 +166,7 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
 
         if (includeExplanations) {
           ex.questions.forEach((q) => {
-            html += `<p><strong>Q${q.number}:</strong> <span style="color:#059669; font-weight:bold;">${q.correctAnswer}</span> — <em>${q.explanation}</em></p>`;
+            html += `<p><strong>Câu ${q.number}:</strong> <span style="color:#059669; font-weight:bold;">${q.correctAnswer}</span> — <em>${q.explanation}</em></p>`;
           });
         }
       });
@@ -170,7 +198,7 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
             <div>
               <h3 className="font-extrabold text-base">Xuất Bản Học Liệu Word (.docx)</h3>
               <p className="text-xs text-emerald-100">
-                Tạo tệp Word chuẩn Bộ Giáo dục & Đào tạo với bảng thông tin, mã đề và đáp án
+                Tạo tệp Word chuẩn Bộ GD&ĐT · Times New Roman 12pt · Giãn dòng 1.15
               </p>
             </div>
           </div>
@@ -326,28 +354,67 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
               </span>
             </label>
           </div>
+
+          {/* Matrix info box */}
+          <div className="pt-3 border-t border-slate-100">
+            <div className="flex items-start space-x-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
+              <Table2 className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-bold text-blue-800 text-xs">Ma trận đề thi (A4 ngang)</p>
+                <p className="text-blue-700 text-[11px] mt-0.5">
+                  Bảng nhiều tầng theo mức Bloom · Số câu, điểm, tỷ lệ % tự động · Ký tên GV &amp; Tổ trưởng
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <button
-            onClick={handleCopyHtml}
-            className="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition"
-          >
-            {copiedSuccess ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-600" />
-                <span className="text-emerald-700">Đã chép mã Word!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4 text-slate-500" />
-                <span>Sao chép định dạng Word</span>
-              </>
-            )}
-          </button>
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-3">
+          {/* Row 1: Copy + Matrix */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopyHtml}
+              className="flex-1 flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition"
+            >
+              {copiedSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span className="text-emerald-700">Đã chép mã Word!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 text-slate-500" />
+                  <span>Sao chép định dạng Word</span>
+                </>
+              )}
+            </button>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={handleDownloadMatrix}
+              disabled={isExportingMatrix || exercises.length === 0}
+              className={`flex-1 flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition ${
+                isExportingMatrix || exercises.length === 0
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+              }`}
+            >
+              {isExportingMatrix ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang tạo ma trận...</span>
+                </>
+              ) : (
+                <>
+                  <Table2 className="w-4 h-4" />
+                  <span>Xuất ma trận đề thi</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Row 2: Close + Download exam */}
+          <div className="flex items-center space-x-2 justify-end">
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 transition"
@@ -357,7 +424,7 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
             <button
               onClick={handleDownloadDocx}
               disabled={isExporting}
-              className={`flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg transition ${
+              className={`flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg transition ${
                 isExporting
                   ? 'bg-slate-300 cursor-not-allowed shadow-none'
                   : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-600/30'
