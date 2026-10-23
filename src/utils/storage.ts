@@ -6,12 +6,13 @@
  * 3. Cho phép giáo viên lưu, mở lại, xuất file JSON bài thi đã tạo (0 lượt gọi AI).
  */
 
-import { ExtractedMaterial, ExerciseResult, ExerciseParameter, SavedExam } from '../types';
+import { ExtractedMaterial, ExerciseResult, ExerciseParameter, SavedExam, ExerciseTemplate } from '../types';
 
 const STORAGE_KEYS = {
   MATERIAL_CACHE: 'edugenius_material_cache_v2',
   EXERCISE_CACHE: 'edugenius_exercise_cache_v2',
   SAVED_EXAMS: 'edugenius_saved_exams_v1',
+  SAVED_TEMPLATES: 'edugenius_saved_templates_v1',
 };
 
 function getStorage(): Storage | null {
@@ -239,4 +240,86 @@ export async function importExamFromJsonFile(file: File): Promise<SavedExam> {
     reader.onerror = () => reject(new Error('Lỗi khi đọc tệp.'));
     reader.readAsText(file);
   });
+}
+
+// ----------------------------------------------------
+// 4. Quản lý Mẫu cấu hình bài tập (Exercise Template Management)
+// Chỉ lưu ExerciseParameter[], KHÔNG lưu AI-generated content.
+// 0 AI calls cho tất cả thao tác.
+// ----------------------------------------------------
+
+export function getSavedTemplates(): ExerciseTemplate[] {
+  const storage = getStorage();
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(STORAGE_KEYS.SAVED_TEMPLATES);
+    if (!raw) return [];
+    const list: ExerciseTemplate[] = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn('Lỗi đọc Saved Templates:', err);
+    return [];
+  }
+}
+
+export function saveTemplate(params: {
+  name: string;
+  parameters: ExerciseParameter[];
+}): ExerciseTemplate {
+  const storage = getStorage();
+  const list = getSavedTemplates();
+  const now = new Date().toISOString();
+
+  const cefrSet = Array.from(new Set(params.parameters.map((p) => p.cefrLevel)));
+  const cefrSummary = cefrSet.join(', ');
+
+  const newTemplate: ExerciseTemplate = {
+    id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: params.name.trim(),
+    createdAt: now,
+    updatedAt: now,
+    parameters: params.parameters.map((p) => ({ ...p })), // deep copy
+    exerciseCount: params.parameters.length,
+    cefrSummary,
+    isSystem: false,
+  };
+
+  list.unshift(newTemplate);
+  // Lưu tối đa 100 mẫu
+  if (list.length > 100) list.pop();
+  if (storage) {
+    storage.setItem(STORAGE_KEYS.SAVED_TEMPLATES, JSON.stringify(list));
+  }
+  return newTemplate;
+}
+
+export function renameTemplate(id: string, newName: string): boolean {
+  const storage = getStorage();
+  const list = getSavedTemplates();
+  const idx = list.findIndex((t) => t.id === id && !t.isSystem);
+  if (idx < 0) return false;
+  list[idx] = { ...list[idx], name: newName.trim(), updatedAt: new Date().toISOString() };
+  if (storage) {
+    storage.setItem(STORAGE_KEYS.SAVED_TEMPLATES, JSON.stringify(list));
+  }
+  return true;
+}
+
+export function deleteTemplate(id: string): boolean {
+  const storage = getStorage();
+  const list = getSavedTemplates();
+  const tpl = list.find((t) => t.id === id);
+  if (!tpl || tpl.isSystem) return false; // Không xóa mẫu hệ thống
+  const filtered = list.filter((t) => t.id !== id);
+  if (storage) {
+    storage.setItem(STORAGE_KEYS.SAVED_TEMPLATES, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+export function isTemplateNameDuplicate(name: string, excludeId?: string): boolean {
+  const list = getSavedTemplates();
+  return list.some(
+    (t) => t.name.toLowerCase() === name.trim().toLowerCase() && t.id !== excludeId
+  );
 }
