@@ -121,3 +121,21 @@ export interface SavedExam {
   totalQuestions: number;
   cefrLevels: CefrLevel[];
 }
+
+/**
+ * ExerciseTemplate – Mẫu cấu hình bài tập (KHÔNG lưu AI content).
+ * Chỉ lưu các tham số kỹ thuật để tái sử dụng cho lần biên soạn tiếp theo.
+ */
+export interface ExerciseTemplate {
+  id: string;
+  name: string;          // Tên mẫu do người dùng đặt
+  createdAt: string;
+  updatedAt: string;
+  parameters: ExerciseParameter[];  // Toàn bộ cấu hình 8 trường
+  /** Số bài tập trong mẫu (computed from parameters.length) */
+  exerciseCount: number;
+  /** Tóm tắt nhanh các CEFR levels */
+  cefrSummary: string;
+  /** true nếu đây là mẫu mặc định của hệ thống (không được xóa/sửa) */
+  isSystem?: boolean;
+}
