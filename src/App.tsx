@@ -14,7 +14,7 @@ import {
   QuestionItem,
   CefrLevel,
 } from './types';
-import { CheckCircle2, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { fetchGenerateExercises } from './utils/apiClient';
 import {
   computeStringHash,
@@ -42,6 +42,7 @@ export default function App() {
   const [generateError, setGenerateError] = useState<{
     message: string;
     isQuota?: boolean;
+    is503?: boolean;
     model?: string;
   } | string | null>(null);
 
@@ -249,17 +250,26 @@ export default function App() {
     } else {
       // Không đề nào thành công
       const err = firstFailedError || new Error('Không thể tạo đề thi.');
+      const status = err.status || 500;
       const isQuota =
-        err.status === 429 ||
+        status === 429 ||
         err.isDailyQuotaExhausted ||
         err.quotaType === 'daily' ||
         err.code === 'DAILY_QUOTA_EXHAUSTED' ||
         err.message?.includes('hạn mức') ||
         err.message?.includes('429');
 
+      const is503 =
+        status === 503 ||
+        err.code === 'SERVICE_UNAVAILABLE' ||
+        err.message?.includes('503') ||
+        err.message?.includes('quá tải') ||
+        err.message?.includes('UNAVAILABLE');
+
       setGenerateError({
         message: err.message || 'Lỗi không xác định khi biên soạn.',
         isQuota: Boolean(isQuota),
+        is503: Boolean(is503),
         model: err.model,
       });
     }
@@ -290,6 +300,59 @@ export default function App() {
   };
 
   // ── Exercise editing (độc lập cho từng đề) ──────────────────────────────────
+
+  const handleRetrySingleExam = async (variantNumber: number) => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setGeneratingStatus(`Đang thử tạo lại Đề ${variantNumber}...`);
+    setGenerateError(null);
+
+    try {
+      const data = await fetchGenerateExercises({
+        rawMaterial: rawText,
+        extractedData: extractedMaterial,
+        parameters: parameters,
+        examVariant: variantNumber,
+        totalExams: examSets.length,
+      });
+
+      if (!data.exercises || data.exercises.length === 0) {
+        throw new Error(`AI không thể tạo danh sách câu hỏi cho Đề ${variantNumber}.`);
+      }
+
+      const { exercises: validatedExercises } = validateAndFixMcqBalance(data.exercises);
+
+      setExamSets((prev) =>
+        prev.map((exam) =>
+          exam.variantNumber === variantNumber
+            ? {
+                ...exam,
+                exercises: validatedExercises,
+                status: 'ready',
+                errorMessage: undefined,
+              }
+            : exam
+        )
+      );
+
+      const targetIdx = examSets.findIndex((e) => e.variantNumber === variantNumber);
+      if (targetIdx === activeExamIndex) {
+        setExercises(validatedExercises);
+      }
+
+      showToast(`Đã tạo thành công Đề ${variantNumber}!`);
+    } catch (err: any) {
+      const is503 = err.status === 503 || err.code === 'SERVICE_UNAVAILABLE';
+      showToast(
+        is503
+          ? `Máy chủ AI vẫn đang quá tải (503). Dữ liệu được bảo toàn, vui lòng thử lại sau giây lát.`
+          : `Không thể tạo Đề ${variantNumber}: ${err.message || 'Lỗi kết nối'}`
+      );
+    } finally {
+      setIsGenerating(false);
+      setGeneratingStatus(null);
+    }
+  };
 
   const handleSelectExamIndex = (idx: number) => {
     setActiveExamIndex(idx);
@@ -452,6 +515,31 @@ export default function App() {
                 </span>
               </div>
             </div>
+          ) : generateError.is503 ? (
+            <div className="mb-6 p-4 bg-sky-50/95 border border-sky-300 rounded-2xl text-xs text-sky-950 shadow-xs space-y-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2 font-bold text-sky-900">
+                <AlertTriangle className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>Dịch vụ Google AI tạm thời quá tải (503 Service Unavailable)</span>
+              </div>
+              <p className="text-sky-800 leading-relaxed text-[11.5px]">
+                {generateError.message}
+              </p>
+              <div className="pt-2 border-t border-sky-200 flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] gap-2 font-medium">
+                <span className="flex items-center space-x-1.5 text-emerald-800">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Toàn bộ 8 tham số bài tập và học liệu nguồn của bạn vẫn được lưu nguyên vẹn 100%.</span>
+                </span>
+                <button
+                  onClick={handleGenerateExercises}
+                  disabled={isGenerating}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center space-x-1.5 shadow-xs transition"
+                  title="Nhấn để thử kết nối lại với máy chủ Google AI"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Bấm thử lại ngay</span>
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 flex items-start space-x-2.5 shadow-xs">
               <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
@@ -501,6 +589,7 @@ export default function App() {
             examSets={examSets}
             activeExamIndex={activeExamIndex}
             onSelectExamIndex={handleSelectExamIndex}
+            onRetryExam={handleRetrySingleExam}
           />
         )}
       </main>
