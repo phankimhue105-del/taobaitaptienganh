@@ -297,10 +297,15 @@ export interface GenerateExercisesParams {
   rawMaterial?: string;
   extractedData?: any;
   parameters: any[];
+  /** Biến thể đề – dùng khi tạo nhiều đề từ cùng nguồn học liệu.
+   * Ví dụ: examVariant=1 là đề đầu tiên, examVariant=2 là đề thứ hai với câu hỏi khác nhau. */
+  examVariant?: number;
+  /** Tổng số đề cần tạo – dùng để AI biết phạm vi cần phân phối câu hỏi. */
+  totalExams?: number;
 }
 
 export async function generateExercisesService(params: GenerateExercisesParams) {
-  const { rawMaterial, extractedData, parameters } = params;
+  const { rawMaterial, extractedData, parameters, examVariant = 1, totalExams = 1 } = params;
 
   if (!parameters || !Array.isArray(parameters) || parameters.length === 0) {
     throw new Error('Chưa có bài tập nào. Vui lòng cấu hình ít nhất một bài tập.');
@@ -308,12 +313,41 @@ export async function generateExercisesService(params: GenerateExercisesParams) 
 
   const ai = getAIClient();
 
+  // Tối ưu hóa payload: Loại bỏ _rawDocxText trùng lặp và rút gọn các trường không thiết yếu
+  let cleanedExtracted: any = null;
+  if (extractedData) {
+    const { _rawDocxText, ...rest } = extractedData;
+    cleanedExtracted = {
+      title: rest.title,
+      summary: rest.summary,
+      cefrRecommended: rest.cefrRecommended,
+      vocabulary: Array.isArray(rest.vocabulary)
+        ? rest.vocabulary.slice(0, 15).map((v: any) => ({
+            term: v.term,
+            partOfSpeech: v.partOfSpeech,
+            definition: v.definition,
+          }))
+        : undefined,
+      grammarPoints: Array.isArray(rest.grammarPoints)
+        ? rest.grammarPoints.slice(0, 8).map((g: any) => ({
+            topic: g.topic,
+            formula: g.formula,
+            rule: g.rule,
+          }))
+        : undefined,
+      suggestedFocusTopics: rest.suggestedFocusTopics,
+    };
+  }
+
+  // Thu gọn rawMaterial nếu có nhiều khoảng trắng thừa
+  const trimmedRaw = rawMaterial ? rawMaterial.trim().replace(/\n\s*\n\s*\n+/g, '\n\n') : '';
+
   const prompt = `
 Dưới đây là thông tin học liệu nguồn và danh sách các bài tập cần biên soạn theo ĐÚNG 8 THAM SỐ KỸ THUẬT:
 
 HỌC LIỆU NGUỒN:
-${rawMaterial ? `Văn bản gốc:\n"""\n${rawMaterial}\n"""\n` : ''}
-${extractedData ? `Dữ liệu phân tích đã trích xuất:\n${JSON.stringify(extractedData, null, 2)}\n` : ''}
+${trimmedRaw ? `Văn bản gốc:\n"""\n${trimmedRaw}\n"""\n` : ''}
+${cleanedExtracted ? `Dữ liệu phân tích sư phạm cốt lõi:\n${JSON.stringify(cleanedExtracted, null, 2)}\n` : ''}
 
 DANH SÁCH BÀI TẬP CẦN TẠO (Tuân thủ nghiêm ngặt từng tham số):
 ${JSON.stringify(parameters, null, 2)}
@@ -325,10 +359,24 @@ QUY TẮC BẮT BUỘC VỀ HÌNH THỨC:
 4. Nếu format là "open_ended": Đây là bài tự luận (điền từ khuyết, chia động từ, viết lại câu, tìm lỗi sai và sửa lại). KHÔNG có options A/B/C/D, correctAnswer là từ/câu trả lời chuẩn xác.
 5. Dạng bài ("exerciseType"): Sử dụng đúng định dạng người dùng đã nhập (VD: "${parameters.map((p: any) => p.exerciseType).join(', ')}").
 6. Trình độ CEFR: Tuân thủ mức độ đã chọn từ 12 cấp độ (Pre-A1, A1, A1+, A2, A2+, B1, B1+, B2, B2+, C1, C1+, C2).
-7. Nếu là bài Đọc hiểu: Cung cấp đoạn văn "readingPassage" bằng tiếng Anh chuẩn phù hợp với CEFR.
+7. Nếu là bài Đọc hiểu: Cung cấp đoạn văn "readingPassage" bằng tiếng Anh chuẩn phù hợp với CEFR. KHÔNG tô màu nền cho đoạn văn.
 8. Nếu là bài Nghe: Cung cấp đoạn transcript "audioScript" tự nhiên, kèm speaker cues và đánh dấu từ khóa dẫn đến đáp án.
 9. Mỗi câu hỏi phải có "correctAnswer" và "explanation" (giải thích sư phạm rõ ràng, chỉ rõ tại sao đúng và phương án nhiễu sai ở đâu).
 
+QUY TẮC CHẤT LƯỢNG CÂU HỎI TRẮC NGHIỆM (Bắt buộc cho mọi đề):
+10. Phương án nhiễu tương đương: Tất cả các phương án ABCD phải tương đương về loại từ (noun/verb/adj/adv) và chức năng ngữ pháp khi dạng bài yêu cầu. Ví dụ: nếu chỗ trống cần một danh từ, tất cả phương án đều là danh từ; nếu cần một thì động từ, tất cả phương án đều là dạng động từ phù hợp.
+11. Chỉ một đáp án đúng: CHỈ có DUY NHẤT một đáp án đúng trong ngữ cảnh. Kiểm tra kỹ lưỡng tất cả phương án trước khi xác định correctAnswer.
+12. Không để đáp án đúng nổi bật bất thường vì dài hơn, ngắn hơn hoặc có cấu trúc khác biệt rõ ràng so với các phương án còn lại.
+13. Phương án nhiễu phải sai rõ ràng về ngữ pháp hoặc ngữ nghĩa nhưng vẫn hợp lý để đánh lừa học sinh thiếu kiến thức.
+14. Bài Phát âm (Pronunciation & Stress): Dùng thẻ HTML <u>phần cần gạch chân</u> cho âm tiết hoặc nhóm chữ cần kiểm tra trong prompt câu hỏi. TUYỆT ĐỐI không dùng ký hiệu '>', '>>', mũi tên hoặc ký tự thay thế khác.
+${totalExams > 1 ? `
+NHIỀU ĐỀ – YÊU CẦU ĐẶC BIỆT:
+Đây là ĐỀ SỐ ${examVariant} trong tổng số ${totalExams} đề cần tạo từ cùng nguồn học liệu. Yêu cầu bắt buộc:
+- Tạo câu hỏi khác biệt hoàn toàn với các đề khác: sử dụng ngữ cảnh khác, ví dụ khác, hoặc góc kiểm tra khác cho cùng chủ điểm.
+- Không chỉ đảo thứ tự câu hoặc hoán vị phương án. Nội dung câu hỏi phải thực sự khác nhau.
+- Giữ nguyên số lượng câu, dạng bài, CEFR và Bloom tương đương với các đề còn lại.
+- Bám sát ngữ liệu gốc, không bổ sung kiến thức ngoài phạm vi nguồn học liệu.
+` : ''}
 Định dạng JSON trả về:
 {
   "exercises": [
@@ -364,19 +412,41 @@ QUY TẮC BẮT BUỘC VỀ HÌNH THỨC:
 }
 `;
 
-  const response = await ai.models.generateContent({
-    model: getGeminiModel(),
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      thinkingConfig: {
-        thinkingLevel: ThinkingLevel.LOW,
-      },
-    },
-  });
+  // Cơ chế retry nội bộ có kiểm soát trên Server khi gặp lỗi 503 quá tải tạm thời
+  const maxServerRetries = 1;
+  let response: any = null;
 
-  const resultText = response.text || '{"exercises": []}';
+  for (let attempt = 0; attempt <= maxServerRetries; attempt++) {
+    try {
+      response = await ai.models.generateContent({
+        model: getGeminiModel(),
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.LOW,
+          },
+        },
+      });
+      break; // Thành công, thoát vòng lặp
+    } catch (err: any) {
+      const rawMsg = err?.message || '';
+      const status = err?.status || err?.statusCode || 500;
+      const is503 = status === 503 || rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE') || rawMsg.includes('overloaded');
+
+      if (is503 && attempt < maxServerRetries) {
+        const jitter = Math.random() * 800;
+        const delayMs = 2500 * (attempt + 1) + jitter;
+        console.warn(`[aiService] Google AI 503 tạm thời quá tải. Đang thử lại cục bộ lần ${attempt + 1}/${maxServerRetries} sau ${Math.round(delayMs)}ms...`);
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const resultText = response?.text || '{"exercises": []}';
   return JSON.parse(resultText);
 }
 
