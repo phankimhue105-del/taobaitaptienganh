@@ -400,7 +400,7 @@ Grammar:
                   <Lightbulb className="w-6 h-6" />
                 </div>
                 <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                  Chưa có dữ liệu phân tích. Hãy nhập văn bản hoặc tải tệp <strong>Word, PDF, JPG, PNG</strong> bên trái rồi nhấn <strong>Phân tích Học liệu</strong>, hoặc nhấn <strong>"Mẫu đề có sẵn"</strong> trên thanh điều hướng.
+                  Chưa có dữ liệu phân tích. Hãy nhập văn bản hoặc tải tệp <strong>Word, PDF, JPG, PNG</strong> bên trái rồi nhấn <strong>Phân tích Học liệu (AI Analysis)</strong>.
                 </p>
                 <button
                   onClick={onProceedToParams}
