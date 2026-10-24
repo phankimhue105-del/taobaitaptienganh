@@ -21,6 +21,27 @@ import {
 } from 'lucide-react';
 import { ExerciseResult, QuestionItem } from '../types';
 
+/**
+ * Chuẩn hóa các dạng đánh dấu gạch chân (<u>, >>word<<, >word<) thành HTML <u> an toàn
+ * Loại bỏ ký tự >, >> bị dùng sai mục đích làm gạch chân
+ */
+function formatUnderlineHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/>>([^<>\n]+)<</g, '<u>$1</u>')
+    .replace(/(?<!<)>([A-Za-z0-9_-]+)<(?!\/)/g, '<u>$1</u>')
+    .replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<u>$1</u>');
+}
+
+export interface ExamVariantItem {
+  id: string;
+  variantNumber: number;
+  title: string;
+  exercises: ExerciseResult[];
+  status?: 'ready' | 'error';
+  errorMessage?: string;
+}
+
 interface ExercisePreviewProps {
   exercises: ExerciseResult[];
   onComplete: () => void;
@@ -30,6 +51,10 @@ interface ExercisePreviewProps {
   onExportWord: () => void;
   /** Lưu mẫu cấu hình (0 AI calls) */
   onSaveTemplate?: () => void;
+  /** Danh sách các đề khi tạo nhiều đề */
+  examSets?: ExamVariantItem[];
+  activeExamIndex?: number;
+  onSelectExamIndex?: (index: number) => void;
 }
 
 export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
@@ -40,6 +65,9 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
   onUpdateExercise,
   onExportWord,
   onSaveTemplate,
+  examSets = [],
+  activeExamIndex = 0,
+  onSelectExamIndex,
 }) => {
   const [viewMode, setViewMode] = useState<'student' | 'teacher' | 'script' | 'matrix'>('teacher');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -86,6 +114,50 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Selector danh sách đề khi tạo nhiều đề (1-5 đề) */}
+      {examSets && examSets.length > 1 && (
+        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-4 text-white shadow-lg flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-bold text-blue-200 flex items-center space-x-1.5 uppercase tracking-wider">
+              <Layers className="w-4 h-4 text-blue-400" />
+              <span>Các biến thể đề ({examSets.length} đề):</span>
+            </span>
+            <div className="flex items-center space-x-1.5">
+              {examSets.map((exam, idx) => {
+                const isActive = idx === activeExamIndex;
+                const totalQ = exam.exercises.reduce((s, e) => s + (e.questions?.length || 0), 0);
+                return (
+                  <button
+                    key={exam.id || idx}
+                    onClick={() => onSelectExamIndex && onSelectExamIndex(idx)}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      isActive
+                        ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30 ring-2 ring-white/40'
+                        : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
+                    }`}
+                  >
+                    <span>{exam.title || `Đề ${idx + 1}`}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-medium ${
+                        isActive ? 'bg-black/20 text-white' : 'bg-white/10 text-slate-300'
+                      }`}
+                    >
+                      {totalQ} câu
+                    </span>
+                    {exam.status === 'error' && (
+                      <span className="w-2 h-2 rounded-full bg-rose-400" title={exam.errorMessage || 'Lỗi'} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="text-[11px] text-blue-200/80 italic">
+            Mỗi đề có câu hỏi độc lập, cùng tuân thủ CEFR, Bloom &amp; cấu hình học liệu
+          </div>
+        </div>
+      )}
+
       {/* Top View Mode Bar & Quick Actions */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
         {/* View Mode Pills */}
@@ -251,10 +323,10 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
               Instruction: {ex.instruction}
             </p>
 
-            {/* Reading Passage */}
+            {/* Reading Passage – nền trắng, không tô màu theme */}
             {ex.readingPassage && ex.readingPassage.trim() && (
-              <div className="p-4 bg-slate-50 rounded-2xl border-l-4 border-blue-500 text-xs sm:text-sm text-slate-800 leading-relaxed space-y-2">
-                <span className="font-bold text-blue-900 block flex items-center space-x-1">
+              <div className="py-3 px-4 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 leading-relaxed space-y-2">
+                <span className="font-bold text-slate-800 block flex items-center space-x-1">
                   <BookOpen className="w-4 h-4 text-blue-600" />
                   <span>Reading Passage:</span>
                 </span>
@@ -407,11 +479,18 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
                     ) : (
                       /* Normal Display Mode */
                       <>
-                        {/* Prompt */}
+                        {/* Prompt – render HTML để hiển thị gạch chân <u> từ AI */}
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start space-x-2 text-xs sm:text-sm text-slate-900 font-medium">
-                            <span className="font-bold text-blue-700">{q.number}.</span>
-                            <span>{q.prompt}</span>
+                            <span className="font-bold text-blue-700 shrink-0">{q.number}.</span>
+                            <span
+                              dangerouslySetInnerHTML={{
+                                __html: (q.prompt || '').replace(
+                                  /&lt;u&gt;(.*?)&lt;\/u&gt;/g,
+                                  '<u>$1</u>'
+                                ),
+                              }}
+                            />
                           </div>
 
                           {/* Quick Edit Trigger */}
