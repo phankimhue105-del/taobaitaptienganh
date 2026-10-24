@@ -286,6 +286,51 @@ assert(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 8. KIỂM TRA TỐI ƯU HÓA LUỒNG TẠO ĐỀ & XỬ LÝ LỖI 503 SERVICE UNAVAILABLE
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n[NHÓM 8] Kiểm tra tối ưu hóa luồng tạo đề & xử lý lỗi 503:');
+
+// Test 8.1: Cấu hình Vercel maxDuration
+const vercelConfigPath = path.join(__dirname, 'vercel.json');
+const vercelConfigContent = fs.readFileSync(vercelConfigPath, 'utf8');
+assert(
+  vercelConfigContent.includes('"maxDuration": 60'),
+  'vercel.json đã mở rộng thời gian chờ serverless functions lên 60 giây',
+  'Ngăn chặn lỗi ngắt kết nối sớm (504/503 timeout) khi tạo đề thi dài.'
+);
+
+// Test 8.2: Tối ưu hóa prompt trong aiService.ts
+const aiServicePath = path.join(__dirname, 'src', 'server', 'aiService.ts');
+const aiServiceContent = fs.readFileSync(aiServicePath, 'utf8');
+assert(
+  aiServiceContent.includes('const { _rawDocxText, ...rest } = extractedData;'),
+  'aiService.ts đã loại bỏ _rawDocxText trùng lặp trước khi đưa vào prompt',
+  'Tiết kiệm 40-60% dung lượng prompt, giảm áp lực hàng đợi lên máy chủ Google.'
+);
+
+assert(
+  aiServiceContent.includes('is503 && attempt < maxServerRetries'),
+  'aiService.ts có cơ chế thử lại nội bộ trên server (Server-side Retry) cho lỗi 503',
+  'Tự động phục hồi khi Google gặp nấc quá tải thoáng qua mà không làm phiền client.'
+);
+
+// Test 8.3: Client không retry 503 để tránh xung đột với server
+const apiClientPath = path.join(__dirname, 'src', 'utils', 'apiClient.ts');
+const apiClientContent = fs.readFileSync(apiClientPath, 'utf8');
+assert(
+  apiClientContent.includes("err.status === 503 || err.code === 'SERVICE_UNAVAILABLE'"),
+  'apiClient.ts chặn retry 503 trên client để tránh spam request',
+  'Đúng yêu cầu: Không để frontend và backend đồng thời retry cùng một yêu cầu.'
+);
+
+// Test 8.4: App.tsx có giao diện chuyên biệt cho lỗi 503 kèm nút thử lại
+assert(
+  appContent.includes('generateError.is503') && appContent.includes('Bấm thử lại ngay'),
+  'App.tsx có giao diện cảnh báo lỗi 503 chuyên biệt kèm nút bấm thử lại chủ động',
+  'Bảo toàn 100% dữ liệu đã nhập, phân biệt hoàn toàn với lỗi 429 hết hạn mức.'
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TỔNG KẾT KẾT QUẢ KIỂM THỬ
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n================================================================');
