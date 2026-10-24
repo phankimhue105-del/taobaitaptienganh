@@ -15,7 +15,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    const { rawMaterial, extractedData, parameters } = body;
+    const { rawMaterial, extractedData, parameters, examVariant, totalExams } = body;
 
     if (!parameters || !Array.isArray(parameters) || parameters.length === 0) {
       return res.status(400).json({
@@ -23,7 +23,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const result = await generateExercisesService({ rawMaterial, extractedData, parameters });
+    const result = await generateExercisesService({ rawMaterial, extractedData, parameters, examVariant, totalExams });
     return res.status(200).json(result);
   } catch (error: any) {
     console.error('Vercel API error in generate-exercises:', error);
