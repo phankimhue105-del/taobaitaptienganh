@@ -489,4 +489,162 @@ export default function App() {
 
         {generateError && (
           typeof generateError === 'string' ? (
-            <div className="mb-6 p-4 bg-rose-50
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 flex items-start space-x-2.5 shadow-xs">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Đã xảy ra lỗi khi tạo học liệu:</span>
+                <span>{generateError}</span>
+              </div>
+            </div>
+          ) : generateError.isQuota ? (
+            <div className="mb-6 p-4 bg-amber-50/95 border border-amber-300 rounded-2xl text-xs text-amber-900 shadow-xs space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2 font-bold text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Hạn mức Gemini API Free Tier (429 RESOURCE_EXHAUSTED)</span>
+              </div>
+              <p className="text-amber-800 leading-relaxed text-[11.5px]">
+                {generateError.message}
+              </p>
+              <div className="pt-2 border-t border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] gap-2 font-medium">
+                <span className="flex items-center space-x-1.5 text-emerald-800">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Cấu hình 8 tham số bài tập của bạn vẫn được lưu nguyên vẹn.</span>
+                </span>
+                <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md font-mono text-[10.5px]">
+                  Model: {generateError.model || 'gemini-3.8-flash'}
+                </span>
+              </div>
+            </div>
+          ) : generateError.is503 ? (
+            <div className="mb-6 p-4 bg-sky-50/95 border border-sky-300 rounded-2xl text-xs text-sky-950 shadow-xs space-y-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2 font-bold text-sky-900">
+                <AlertTriangle className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>Dịch vụ Google AI tạm thời quá tải (503 Service Unavailable)</span>
+              </div>
+              <p className="text-sky-800 leading-relaxed text-[11.5px]">
+                {generateError.message}
+              </p>
+              <div className="pt-2 border-t border-sky-200 flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] gap-2 font-medium">
+                <span className="flex items-center space-x-1.5 text-emerald-800">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Toàn bộ 8 tham số bài tập và học liệu nguồn của bạn vẫn được lưu nguyên vẹn 100%.</span>
+                </span>
+                <button
+                  onClick={handleGenerateExercises}
+                  disabled={isGenerating}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center space-x-1.5 shadow-xs transition"
+                  title="Nhấn để thử kết nối lại với máy chủ Google AI"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Bấm thử lại ngay</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 flex items-start space-x-2.5 shadow-xs">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Đã xảy ra lỗi khi tạo học liệu:</span>
+                <span>{generateError.message}</span>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* Step 1: Nguồn học liệu */}
+        {activeStep === 1 && (
+          <MaterialInputSection
+            rawText={rawText}
+            setRawText={setRawText}
+            extractedMaterial={extractedMaterial}
+            setExtractedMaterial={setExtractedMaterial}
+            onProceedToParams={() => setActiveStep(2)}
+            onApplySuggestedFocus={handleApplySuggestedFocus}
+          />
+        )}
+
+        {/* Step 2: Tham số kỹ thuật 8 trường & Chọn số lượng đề (1-5) */}
+        {activeStep === 2 && (
+          <ExerciseConfigMatrix
+            parameters={parameters}
+            setParameters={setParameters}
+            onGenerate={handleGenerateExercises}
+            isGenerating={isGenerating}
+            onBackToInput={() => setActiveStep(1)}
+            examCount={examCount}
+            setExamCount={setExamCount}
+          />
+        )}
+
+        {/* Step 3: Xem trước Sư phạm & Tinh chỉnh */}
+        {activeStep === 3 && (
+          <ExercisePreview
+            exercises={currentDisplayExercises}
+            onComplete={() => setIsExportModalOpen(true)}
+            onOpenAdjustment={handleOpenAdjustment}
+            onUpdateQuestion={handleUpdateQuestion}
+            onUpdateExercise={handleUpdateExercise}
+            onExportWord={() => setIsExportModalOpen(true)}
+            onSaveTemplate={handleOpenSaveTemplate}
+            examSets={examSets}
+            activeExamIndex={activeExamIndex}
+            onSelectExamIndex={handleSelectExamIndex}
+            onRetryExam={handleRetrySingleExam}
+          />
+        )}
+      </main>
+
+      {/* Saved Templates Modal */}
+      <SavedTemplatesModal
+        isOpen={isTemplatesModalOpen}
+        onClose={() => {
+          setIsTemplatesModalOpen(false);
+          refreshTemplateCount();
+        }}
+        onUseTemplate={handleUseTemplate}
+      />
+
+      {/* Save Template Mini Modal */}
+      <SaveTemplateMiniModal
+        isOpen={isSaveTemplateModalOpen}
+        onClose={() => setIsSaveTemplateModalOpen(false)}
+        parameters={parameters}
+        onSaved={handleTemplateSaved}
+      />
+
+      {/* Adjustment Modal */}
+      <AdjustmentModal
+        isOpen={isAdjustmentModalOpen}
+        onClose={() => setIsAdjustmentModalOpen(false)}
+        exercises={currentDisplayExercises}
+        selectedExerciseId={adjustmentTarget.exerciseId}
+        targetQuestionNumber={adjustmentTarget.questionNumber}
+        rawMaterialText={rawText}
+        onExerciseUpdated={handleExerciseUpdated}
+      />
+
+      {/* Export Word Modal */}
+      <ExportWordModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        exercises={currentDisplayExercises}
+        parameters={parameters}
+        examTitle={examSets[activeExamIndex]?.title || 'Đề 1'}
+      />
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-slate-200/80 py-6 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p>© {new Date().getFullYear()} EduGenius • Thiết kế đề thi và học liệu tiếng Anh với AI · Tham chiếu CEFR &amp; Bloom</p>
+          <div className="flex items-center space-x-4 text-slate-400">
+            <span>Khung CEFR Pre-A1 - C2</span>
+            <span>•</span>
+            <span>Bloom's Revised Taxonomy</span>
+            <span>•</span>
+            <span>Microsoft Word .docx Export</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
