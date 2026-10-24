@@ -26,6 +26,8 @@ interface ExerciseConfigMatrixProps {
   onGenerate: () => void;
   isGenerating: boolean;
   onBackToInput: () => void;
+  examCount: number;
+  setExamCount: (n: number) => void;
 }
 
 const COGNITIVE_LEVELS: { level: CognitiveLevel; desc: string; color: string }[] = [
@@ -54,6 +56,8 @@ export const ExerciseConfigMatrix: React.FC<ExerciseConfigMatrixProps> = ({
   onGenerate,
   isGenerating,
   onBackToInput,
+  examCount,
+  setExamCount,
 }) => {
   const addExercise = () => {
     const newOrder = parameters.length + 1;
@@ -402,28 +406,59 @@ export const ExerciseConfigMatrix: React.FC<ExerciseConfigMatrixProps> = ({
           </span>
         </div>
 
-        <button
-          onClick={onGenerate}
-          disabled={isGenerating || parameters.length === 0}
-          className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl text-xs font-bold transition shadow-lg ${
-            isGenerating || parameters.length === 0
-              ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-500/30'
-          }`}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>AI đang xây dựng đề thi...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              <span>Tiến hành Biên soạn Học liệu ({totalQuestions} câu)</span>
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </>
-          )}
-        </button>
+        {/* Số lượng đề + nút biên soạn */}
+        <div className="flex items-center space-x-3">
+          {/* Selector số lượng đề */}
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-slate-300 font-medium whitespace-nowrap">Số đề:</span>
+            <div className="flex items-center space-x-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setExamCount(n)}
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition ${
+                    examCount === n
+                      ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
+                  }`}
+                  title={`Tạo ${n} đề khác nhau cùng cấu hình`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            {examCount > 1 && (
+              <span className="text-[11px] text-amber-300 font-medium">
+                ≈{examCount} lượt AI
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={onGenerate}
+            disabled={isGenerating || parameters.length === 0}
+            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl text-xs font-bold transition shadow-lg ${
+              isGenerating || parameters.length === 0
+                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-blue-500/30'
+            }`}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>AI đang biên soạn...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>
+                  Biên soạn {examCount > 1 ? `${examCount} đề` : 'Học liệu'} ({totalQuestions} câu)
+                </span>
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
