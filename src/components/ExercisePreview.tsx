@@ -18,6 +18,8 @@ import {
   GraduationCap,
   Save,
   Bookmark,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { ExerciseResult, QuestionItem } from '../types';
 
@@ -55,6 +57,7 @@ interface ExercisePreviewProps {
   examSets?: ExamVariantItem[];
   activeExamIndex?: number;
   onSelectExamIndex?: (index: number) => void;
+  onRetryExam?: (variantNumber: number) => void;
 }
 
 export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
@@ -68,6 +71,7 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
   examSets = [],
   activeExamIndex = 0,
   onSelectExamIndex,
+  onRetryExam,
 }) => {
   const [viewMode, setViewMode] = useState<'student' | 'teacher' | 'script' | 'matrix'>('teacher');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -269,7 +273,33 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
         </div>
       </div>
 
+      {/* Khi đề đang chọn chưa có câu hỏi (do lỗi tạo đề hoặc 503) */}
+      {exercises.length === 0 && (
+        <div className="bg-white rounded-3xl p-10 border border-slate-200/80 shadow-md max-w-4xl mx-auto text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h3 className="font-bold text-slate-800 text-sm">
+            {examSets[activeExamIndex]?.title || 'Đề này'} chưa được tạo thành công
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            {examSets[activeExamIndex]?.errorMessage ||
+              'Dịch vụ Google AI đang tạm thời quá tải (503 Service Unavailable). Toàn bộ các đề đã tạo thành công trước đó vẫn được lưu nguyên vẹn 100%.'}
+          </p>
+          {onRetryExam && (
+            <button
+              onClick={() => onRetryExam(examSets[activeExamIndex]?.variantNumber || activeExamIndex + 1)}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs inline-flex items-center space-x-1.5 shadow-sm transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Thử tạo lại riêng {examSets[activeExamIndex]?.title || 'đề này'}</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Main Exercises Paper Sheet */}
+      {exercises.length > 0 && (
       <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/80 shadow-md max-w-4xl mx-auto space-y-8 font-sans print:shadow-none print:border-none print:p-0">
         {/* Mock Exam Header (for preview and print) */}
         <div className="border-b-2 border-slate-800 pb-5 mb-6">
@@ -608,6 +638,7 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Floating Bottom Action Bar */}
       <div className="sticky bottom-4 max-w-4xl mx-auto bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl border border-slate-800">
