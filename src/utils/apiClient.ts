@@ -41,52 +41,78 @@ export class ApiError extends Error {
 
 async function parseResponse<T = any>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type') || '';
-  const isJson = contentType.includes('application/json');
 
-  if (!response.ok) {
-    let errorMessage = `Yêu cầu thất bại với mã lỗi ${response.status} (${response.statusText})`;
-    let errorData: any = null;
-
-    if (isJson) {
-      try {
-        errorData = await response.json();
-        errorMessage = errorData.error || errorData.message || errorMessage;
-      } catch {
-        // Fallback to default message
-      }
-    } else {
-      try {
-        const text = await response.text();
-        if (text.includes('<html') || text.includes('The page cannot be found') || text.includes('NOT_FOUND')) {
-          errorMessage = `Không tìm thấy endpoint API (${response.status} ${response.statusText}). Hãy kiểm tra xem Vercel Functions đã được triển khai chính xác chưa.`;
-        } else if (text.length > 0) {
-          errorMessage = text.slice(0, 200);
-        }
-      } catch {
-        // Fallback to default message
-      }
-    }
-
-    throw new ApiError(errorMessage, response.status, response.statusText, {
-      code: errorData?.code,
-      quotaType: errorData?.quotaType,
-      model: errorData?.model,
-      isDailyQuotaExhausted: errorData?.isDailyQuotaExhausted,
-      data: errorData,
-    });
-  }
-
-  if (!isJson) {
-    const text = await response.text();
+  // 1. Luôn đọc dưới dạng text trước để không bao giờ bị lỗi 'Unexpected end of JSON input'
+  let rawText = '';
+  try {
+    rawText = (await response.text()).trim();
+  } catch (readErr: any) {
     throw new ApiError(
-      `Máy chủ trả về dữ liệu định dạng không phải JSON (${contentType || 'text/html'}). API có thể đang bị rewrite nhầm thành trang HTML.`,
+      `Không thể đọc dữ liệu phản hồi từ máy chủ: ${readErr.message || 'Lỗi kết nối stream'}`,
       response.status,
-      response.statusText,
-      { data: text }
+      response.statusText
     );
   }
 
-  return response.json() as Promise<T>;
+  // 2. Nếu phản hồi hoàn toàn rỗng
+  if (!rawText) {
+    if (!response.ok) {
+      throw new ApiError(
+        `Máy chủ phản hồi mã lỗi ${response.status} (${response.statusText}) nhưng không có nội dung. Vui lòng thử lại sau giây lát.`,
+        response.status,
+        response.statusText
+      );
+    }
+    throw new ApiError(
+      `Máy chủ trả về phản hồi rỗng (0 bytes). Vui lòng thử lại sau giây lát.`,
+      response.status,
+      response.statusText
+    );
+  }
+
+  // 3. Thử parse JSON một cách an toàn
+  let parsedData: any = null;
+  let isJsonParseSuccess = false;
+
+  try {
+    parsedData = JSON.parse(rawText);
+    isJsonParseSuccess = true;
+  } catch {
+    isJsonParseSuccess = false;
+  }
+
+  // 4. Xử lý khi phản hồi HTTP không thành công (!response.ok)
+  if (!response.ok) {
+    let errorMessage = `Yêu cầu thất bại với mã lỗi ${response.status} (${response.statusText})`;
+
+    if (isJsonParseSuccess && parsedData && (parsedData.error || parsedData.message)) {
+      errorMessage = parsedData.error || parsedData.message;
+    } else if (rawText.includes('<html') || rawText.includes('The page cannot be found') || rawText.includes('NOT_FOUND')) {
+      errorMessage = `Không tìm thấy endpoint API (${response.status} ${response.statusText}). Hãy kiểm tra xem Vercel Functions đã được triển khai chính xác chưa.`;
+    } else if (rawText.length > 0) {
+      errorMessage = rawText.slice(0, 200);
+    }
+
+    throw new ApiError(errorMessage, response.status, response.statusText, {
+      code: parsedData?.code,
+      quotaType: parsedData?.quotaType,
+      model: parsedData?.model,
+      isDailyQuotaExhausted: parsedData?.isDailyQuotaExhausted,
+      data: parsedData || rawText,
+    });
+  }
+
+  // 5. Nếu HTTP 200 nhưng không phải JSON hợp lệ
+  if (!isJsonParseSuccess) {
+    throw new ApiError(
+      `Máy chủ trả về dữ liệu không phải định dạng JSON hợp lệ (${contentType || 'text/plain'}): ${rawText.slice(0, 150)}...`,
+      response.status,
+      response.statusText,
+      { data: rawText }
+    );
+  }
+
+  return parsedData as T;
 }
 
 /**
