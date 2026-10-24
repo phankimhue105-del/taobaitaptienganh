@@ -20,6 +20,7 @@ interface ExportWordModalProps {
   onClose: () => void;
   exercises: ExerciseResult[];
   parameters?: ExerciseParameter[];
+  examTitle?: string;
 }
 
 export const ExportWordModal: React.FC<ExportWordModalProps> = ({
@@ -27,16 +28,26 @@ export const ExportWordModal: React.FC<ExportWordModalProps> = ({
   onClose,
   exercises,
   parameters = [],
+  examTitle,
 }) => {
   const [headerInfo, setHeaderInfo] = useState<ExamHeaderInfo>({
     schoolName: 'TRƯỜNG THPT CHUYÊN HÀ NỘI - AMSTERDAM',
     subject: 'TIẾNG ANH (ENGLISH LANGUAGE)',
-    testTitle: 'BÀI KIỂM TRA ĐỊNH KỲ - 45 PHÚT',
+    testTitle: examTitle ? `BÀI KIỂM TRA ĐỊNH KỲ - ${examTitle.toUpperCase()}` : 'BÀI KIỂM TRA ĐỊNH KỲ - 45 PHÚT',
     gradeOrClass: 'Lớp 10A1',
     durationMinutes: 45,
     academicYear: '2024 - 2025',
     teacherName: 'Tổ Ngoại Ngữ',
   });
+
+  React.useEffect(() => {
+    if (examTitle) {
+      setHeaderInfo((prev) => ({
+        ...prev,
+        testTitle: `BÀI KIỂM TRA ĐỊNH KỲ - ${examTitle.toUpperCase()}`,
+      }));
+    }
+  }, [examTitle]);
 
   const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
   const [includeExplanations, setIncludeExplanations] = useState(true);
