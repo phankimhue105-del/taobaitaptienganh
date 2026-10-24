@@ -99,85 +99,99 @@ function shuffleOptions(q: QuestionItem): QuestionItem {
 
   // Gán lại key A/B/C/D theo thứ tự mới
   const keyMap: Record<number, string> = { 0: 'A', 1: 'B', 2: 'C', 3: 'D' };
-  const newOptions = shuffled.map((opt, i) => ({
-    key: keyMap[i] ?? opt.key,
-    text: opt.text,
+  const newOptions = shuffled.map((opt, idx) => ({
+    ...opt,
+    key: keyMap[idx] || opt.key,
   }));
 
   // Tìm key mới của đáp án đúng
-  const newCorrectIdx = newOptions.findIndex(o => o.text === correctOption.text);
-  const newCorrectKey = newCorrectIdx >= 0 ? newOptions[newCorrectIdx].key : oldCorrectKey;
+  const newCorrectOption = newOptions.find(o => o.text === correctOption.text);
+  const newCorrectKey = newCorrectOption ? newCorrectOption.key : oldCorrectKey;
 
-  // Cập nhật correctAnswer: giữ phần text gốc, đổi key
-  let newCorrectAnswer = q.correctAnswer;
+  // Cập nhật correctAnswer giữ nguyên format "A. text" nếu ban đầu có text
+  let newCorrectAnswer = newCorrectKey;
   if (q.correctAnswer.includes('.')) {
-    const parts = q.correctAnswer.split(/\.\s*/);
-    newCorrectAnswer = `${newCorrectKey}. ${parts.slice(1).join('. ')}`;
-  } else {
-    newCorrectAnswer = newCorrectKey;
+    newCorrectAnswer = `${newCorrectKey}. ${correctOption.text}`;
   }
 
-  return { ...q, options: newOptions, correctAnswer: newCorrectAnswer };
+  return {
+    ...q,
+    options: newOptions,
+    correctAnswer: newCorrectAnswer,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Balance distribution of correct answers A/B/C/D
+// Balance distribution
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Kiểm tra độ lệch phân bổ.
- * Trả về true nếu phân bổ đã cân bằng (max - min ≤ 2 cho mỗi key).
+ * Kiểm tra xem phân bổ có bị lệch quá mức không.
+ * Tiêu chí: max count - min count <= 2 (với đề từ 4 câu trở lên).
  */
 function isDistributionBalanced(dist: Record<string, number>, numOptions: number): boolean {
-  const keys = numOptions === 4 ? ['A', 'B', 'C', 'D'] : ['A', 'B', 'C'];
+  const keys = ['A', 'B', 'C', 'D'].slice(0, numOptions);
   const counts = keys.map(k => dist[k] ?? 0);
-  const maxC = Math.max(...counts);
-  const minC = Math.min(...counts);
-  return maxC - minC <= 2;
+  const max = Math.max(...counts);
+  const min = Math.min(...counts);
+  return max - min <= 2;
 }
 
 /**
- * Cân bằng phân bổ đáp án đúng trong một bài tập MCQ:
- * - Xáo trộn options của những câu có đáp án đúng xuất hiện quá nhiều
- * - Đảm bảo sau xáo trộn, key đáp án đúng phân bổ đều hơn
- * - Bảo toàn 100% tính đúng đắn
+ * Cố gắng cân bằng phân bổ A/B/C/D bằng cách xáo trộn options của một số câu.
+ * Tối đa thử 5 lần xáo trộn.
  */
 function balanceExercise(ex: ExerciseResult): { exercise: ExerciseResult; shuffledCount: number } {
-  if (!isMCQFormat(ex.format)) return { exercise: ex, shuffledCount: 0 };
+  if (!isMCQFormat(ex.format) || ex.questions.length < 4) {
+    return { exercise: ex, shuffledCount: 0 };
+  }
 
   const numOptions = ex.format === 'mcq_3' ? 3 : ex.format === 'true_false' ? 2 : 4;
-  // Không cân bằng nếu quá ít câu
-  if (ex.questions.length < numOptions) return { exercise: ex, shuffledCount: 0 };
-
-  const keys = numOptions === 4 ? ['A', 'B', 'C', 'D'] : numOptions === 3 ? ['A', 'B', 'C'] : ['A', 'B'];
-  const targetPerKey = ex.questions.length / keys.length;
-
   let questions = [...ex.questions];
+  let dist = countDistribution(questions);
+
+  if (isDistributionBalanced(dist, numOptions)) {
+    return { exercise: ex, shuffledCount: 0 };
+  }
+
   let shuffledCount = 0;
-  let maxAttempts = ex.questions.length * 3; // tránh vòng lặp vô tận
-  let attempts = 0;
+  const maxAttempts = 5;
 
-  while (!isDistributionBalanced(countDistribution(questions), numOptions) && attempts < maxAttempts) {
-    attempts++;
-    const dist = countDistribution(questions);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Tìm key đang có nhiều nhất và ít nhất
+    const keys = ['A', 'B', 'C', 'D'].slice(0, numOptions);
+    const sortedKeys = [...keys].sort((a, b) => (dist[b] ?? 0) - (dist[a] ?? 0));
+    const mostFrequentKey = sortedKeys[0];
+    const leastFrequentKey = sortedKeys[sortedKeys.length - 1];
 
-    // Tìm key xuất hiện nhiều nhất
-    const overKey = keys.reduce((a, b) => (dist[a] ?? 0) > (dist[b] ?? 0) ? a : b);
-    const overCount = dist[overKey] ?? 0;
+    if ((dist[mostFrequentKey] ?? 0) - (dist[leastFrequentKey] ?? 0) <= 2) {
+      break; // đã cân bằng
+    }
 
-    if (overCount <= Math.ceil(targetPerKey)) break;
+    // Tìm câu đầu tiên có đáp án là mostFrequentKey và xáo trộn nó
+    const targetIdx = questions.findIndex(
+      q => parseCorrectKey(q.correctAnswer) === mostFrequentKey && (q.options?.length ?? 0) >= 2
+    );
 
-    // Chọn ngẫu nhiên một câu có đáp án đúng là overKey
-    const candidates = questions.map((q, i) => ({ q, i })).filter(({ q }) => parseCorrectKey(q.correctAnswer) === overKey);
-    if (candidates.length === 0) break;
+    if (targetIdx === -1) break;
 
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-    const shuffled = shuffleOptions(chosen.q);
+    // Xáo trộn options câu này cho đến khi đáp án đúng rơi vào key khác (ưu tiên leastFrequentKey)
+    let bestShuffled = questions[targetIdx];
+    for (let tryIdx = 0; tryIdx < 8; tryIdx++) {
+      const candidate = shuffleOptions(questions[targetIdx]);
+      const newKey = parseCorrectKey(candidate.correctAnswer);
+      if (newKey !== mostFrequentKey) {
+        bestShuffled = candidate;
+        if (newKey === leastFrequentKey) break; // tốt nhất
+      }
+    }
 
-    // Chỉ áp dụng nếu key đáp án đúng thực sự thay đổi
-    if (parseCorrectKey(shuffled.correctAnswer) !== overKey) {
-      questions = questions.map((q, i) => i === chosen.i ? shuffled : q);
+    if (parseCorrectKey(bestShuffled.correctAnswer) !== mostFrequentKey) {
+      questions[targetIdx] = bestShuffled;
       shuffledCount++;
+      dist = countDistribution(questions);
+    } else {
+      break; // không thể đổi key của câu này nữa
     }
   }
 
