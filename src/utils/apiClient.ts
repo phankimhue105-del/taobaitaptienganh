@@ -90,9 +90,11 @@ async function parseResponse<T = any>(response: Response): Promise<T> {
 }
 
 /**
- * Thực hiện gọi API với cơ chế retry có kiểm soát:
+ * Thực hiện gọi API với cơ chế an toàn:
  * - TUYỆT ĐỐI KHÔNG RETRY nếu lỗi do hết quota ngày (429 Daily Quota / RESOURCE_EXHAUSTED).
- * - Chỉ retry tối đa 1 lần với exponential backoff + jitter nếu gặp lỗi giới hạn theo phút (RPM) hoặc máy chủ 503 quá tải.
+ * - KHÔNG RETRY 503 trên client vì Backend Server đã có cơ chế retry nội bộ với Google SDK,
+ *   tránh việc frontend và backend đồng thời retry gây spam máy chủ.
+ * - Chỉ retry tối đa 1 lần cho lỗi nghẽn tốc độ theo phút (Rate limit per minute) với jitter.
  */
 async function fetchWithControlledRetry<T>(
   requestFn: () => Promise<Response>,
@@ -107,18 +109,23 @@ async function fetchWithControlledRetry<T>(
       return await parseResponse<T>(response);
     } catch (err: any) {
       if (err instanceof ApiError) {
-        // Nếu là lỗi hết Quota ngày: Dừng ngay lập tức, không retry để tránh lãng phí
+        // 1. Hết hạn mức ngày (429 Daily Quota): Dừng ngay lập tức, không retry
         if (err.isDailyQuotaExhausted || err.quotaType === 'daily' || err.code === 'DAILY_QUOTA_EXHAUSTED') {
           throw err;
         }
 
-        // Chỉ thử lại tối đa maxRetries lần nếu là lỗi giới hạn phút hoặc 503 tạm thời
-        const isTransient = err.quotaType === 'minute' || err.status === 503;
-        if (isTransient && attempt < maxRetries) {
+        // 2. Lỗi 503 Quá tải: Backend đã retry nội bộ. Không retry thêm trên client để tránh spam Vercel Function
+        if (err.status === 503 || err.code === 'SERVICE_UNAVAILABLE') {
+          throw err;
+        }
+
+        // 3. Giới hạn tốc độ theo phút (Rate limit per minute): Thử lại có kiểm soát tối đa 1 lần
+        const isMinuteRateLimit = err.quotaType === 'minute' || err.code === 'RATE_LIMIT_PER_MINUTE';
+        if (isMinuteRateLimit && attempt < maxRetries) {
           attempt++;
-          const jitter = Math.random() * 500;
-          const delayMs = attempt * 1500 + jitter;
-          console.warn(`[EduGenius] Đang thử lại lần ${attempt}/${maxRetries} sau ${Math.round(delayMs)}ms do lỗi tạm thời (${err.status})...`);
+          const jitter = Math.random() * 800;
+          const delayMs = attempt * 2000 + jitter;
+          console.warn(`[EduGenius Client] Đang thử lại lần ${attempt}/${maxRetries} sau ${Math.round(delayMs)}ms do giới hạn tốc độ phút...`);
           await new Promise((res) => setTimeout(res, delayMs));
           continue;
         }
@@ -160,6 +167,8 @@ export async function fetchGenerateExercises(payload: {
   rawMaterial?: string;
   extractedData?: any;
   parameters: any[];
+  examVariant?: number;
+  totalExams?: number;
 }) {
   return fetchWithControlledRetry<{ exercises: any[] }>(() =>
     fetch('/api/generate-exercises', {
