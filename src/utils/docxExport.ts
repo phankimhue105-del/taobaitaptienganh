@@ -55,6 +55,60 @@ function tr(
   });
 }
 
+/**
+ * Phân tích chuỗi có chứa đánh dấu gạch chân (<u>...</u> hoặc ký tự đánh dấu sai >>word<<, >word<)
+ * thành mảng TextRun của docx với định dạng UnderlineType.SINGLE thực sự.
+ * Đồng thời loại bỏ dấu >, >> dùng sai mục đích mà không làm ảnh hưởng văn bản hợp lệ.
+ */
+export function parseUnderlineToRuns(
+  rawText: string,
+  opts: {
+    bold?: boolean;
+    italics?: boolean;
+    color?: string;
+    size?: number;
+    underline?: boolean;
+  } = {}
+): TextRun[] {
+  if (!rawText) return [];
+
+  // Chuẩn hóa:
+  // 1. Chuyển >>word<< thành <u>word</u>
+  let normalized = rawText.replace(/>>([^<>\n]+)<</g, '<u>$1</u>');
+  // 2. Chuyển >word< (không chứa khoảng trắng, là âm tiết/từ) thành <u>word</u>
+  normalized = normalized.replace(/(?<!<)>([A-Za-z0-9_-]+)<(?!\/)/g, '<u>$1</u>');
+  // 3. Chuyển dạng HTML bị escape &lt;u&gt;...&lt;/u&gt;
+  normalized = normalized.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<u>$1</u>');
+
+  // Nếu không có thẻ <u>, trả về 1 TextRun thông thường
+  if (!normalized.includes('<u>')) {
+    return [tr(normalized, opts)];
+  }
+
+  const runs: TextRun[] = [];
+  const parts = normalized.split(/(<u>.*?<\/u>)/gi);
+
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>')) {
+      const cleanContent = part.replace(/<\/?u>/gi, '');
+      runs.push(
+        tr(cleanContent, {
+          ...opts,
+          underline: true,
+        })
+      );
+    } else {
+      const textOnly = part.replace(/<[^>]+>/g, '');
+      if (textOnly) {
+        runs.push(tr(textOnly, opts));
+      }
+    }
+  }
+
+  return runs.length > 0 ? runs : [tr(rawText, opts)];
+}
+
 /** Paragraph mặc định với giãn dòng 1.15 */
 function para(
   children: TextRun[],
@@ -192,20 +246,22 @@ export async function generateWordDocument(
       )
     );
 
-    // Reading Passage (nếu có)
+    // Reading Passage (nếu có) – nền trắng, không tô màu theme
     if (ex.readingPassage && ex.readingPassage.trim()) {
       const passageLines = ex.readingPassage.split('\n');
+      // Strip HTML tags (<u>, etc.) for plain Word text
+      const stripHtml = (s: string) => s.replace(/<[^>]+>/g, '');
       passageLines.forEach((line, i) => {
         docChildren.push(
           para(
-            [tr(i === 0 ? `Reading Passage: ${line}` : line, {
+            [tr(i === 0 ? `Reading Passage: ${stripHtml(line)}` : stripHtml(line), {
               bold: i === 0,
               italics: i === 0,
               size: SIZE_BODY,
             })],
             {
-              shading: { fill: 'F1F5F9' },
-              borderLeft: { color: '3B82F6', size: 24 },
+              // Nền trắng, không shading màu
+              borderLeft: { color: 'CBD5E1', size: 12 },
               spacing: { line: LINE_SPACING, before: i === 0 ? 100 : 0, after: i === passageLines.length - 1 ? 140 : 0 },
               indent: { left: convertInchesToTwip(0.15) },
             }
@@ -239,12 +295,12 @@ export async function generateWordDocument(
 
     // ─── Câu hỏi ───
     ex.questions.forEach((q) => {
-      // Prompt câu hỏi
+      // Prompt câu hỏi – parse gạch chân thực sự
       docChildren.push(
         para(
           [
             tr(`${q.number}. `, { bold: true, size: SIZE_BODY }),
-            tr(q.prompt, { size: SIZE_BODY }),
+            ...parseUnderlineToRuns(q.prompt, { size: SIZE_BODY }),
           ],
           { spacing: { line: LINE_SPACING, before: 140, after: 60 } }
         )
@@ -256,10 +312,14 @@ export async function generateWordDocument(
 
         if (layout === 'inline4' && q.options.length === 4) {
           // 4 phương án trên 1 dòng
-          const runs = q.options.flatMap((opt, i) => [
-            tr(`${opt.key}. `, { bold: true, size: SIZE_BODY }),
-            tr(`${opt.text}${i < q.options!.length - 1 ? '          ' : ''}`, { size: SIZE_BODY }),
-          ]);
+          const runs: TextRun[] = [];
+          q.options.forEach((opt, i) => {
+            runs.push(tr(`${opt.key}. `, { bold: true, size: SIZE_BODY }));
+            runs.push(...parseUnderlineToRuns(opt.text, { size: SIZE_BODY }));
+            if (i < q.options!.length - 1) {
+              runs.push(tr('          ', { size: SIZE_BODY }));
+            }
+          });
           docChildren.push(
             para(runs, { indent: OPTION_INDENT, spacing: { line: LINE_SPACING, before: 0, after: 80 } })
           );
@@ -270,9 +330,10 @@ export async function generateWordDocument(
             para(
               [
                 tr(`${a.key}. `, { bold: true, size: SIZE_BODY }),
-                tr(`${a.text}          `, { size: SIZE_BODY }),
+                ...parseUnderlineToRuns(a.text, { size: SIZE_BODY }),
+                tr('          ', { size: SIZE_BODY }),
                 tr(`${b.key}. `, { bold: true, size: SIZE_BODY }),
-                tr(b.text, { size: SIZE_BODY }),
+                ...parseUnderlineToRuns(b.text, { size: SIZE_BODY }),
               ],
               { indent: OPTION_INDENT, spacing: { line: LINE_SPACING, before: 0, after: 40 } }
             )
@@ -282,9 +343,10 @@ export async function generateWordDocument(
               para(
                 [
                   tr(`${c.key}. `, { bold: true, size: SIZE_BODY }),
-                  tr(`${c.text}          `, { size: SIZE_BODY }),
+                  ...parseUnderlineToRuns(c.text, { size: SIZE_BODY }),
+                  tr('          ', { size: SIZE_BODY }),
                   tr(`${d.key}. `, { bold: true, size: SIZE_BODY }),
-                  tr(d.text, { size: SIZE_BODY }),
+                  ...parseUnderlineToRuns(d.text, { size: SIZE_BODY }),
                 ],
                 { indent: OPTION_INDENT, spacing: { line: LINE_SPACING, before: 0, after: 80 } }
               )
@@ -297,7 +359,7 @@ export async function generateWordDocument(
               para(
                 [
                   tr(`${opt.key}. `, { bold: true, size: SIZE_BODY }),
-                  tr(opt.text, { size: SIZE_BODY }),
+                  ...parseUnderlineToRuns(opt.text, { size: SIZE_BODY }),
                 ],
                 { indent: OPTION_INDENT, spacing: { line: LINE_SPACING, before: 0, after: i < q.options!.length - 1 ? 40 : 80 } }
               )
