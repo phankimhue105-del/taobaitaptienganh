@@ -20,6 +20,7 @@ import {
   Bookmark,
   AlertTriangle,
   RotateCcw,
+  Layers,
 } from 'lucide-react';
 import { ExerciseResult, QuestionItem } from '../types';
 
@@ -445,7 +446,7 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
                                     type="text"
                                     value={opt.text}
                                     onChange={(e) => {
-                                       const updatedOpts = q.options!.map((o) =>
+                                      const updatedOpts = q.options!.map((o) =>
                                         o.key === opt.key ? { ...o, text: e.target.value } : o
                                       );
                                       onUpdateQuestion(ex.id, q.id, { options: updatedOpts });
@@ -486,4 +487,204 @@ export const ExercisePreview: React.FC<ExercisePreviewProps> = ({
                                 onUpdateQuestion(ex.id, q.id, { cognitiveTag: e.target.value as any })
                               }
                               placeholder="Nhận biết / Thông hiểu / Vận dụng"
-                              className="w-full px-2.5 py-1 text-xs border border-
+                              className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Explanation */}
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                            Giải thích sư phạm:
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={q.explanation}
+                            onChange={(e) =>
+                              onUpdateQuestion(ex.id, q.id, { explanation: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      /* Normal Display Mode */
+                      <>
+                        {/* Prompt – render HTML để hiển thị gạch chân <u> từ AI */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start space-x-2 text-xs sm:text-sm text-slate-900 font-medium">
+                            <span className="font-bold text-blue-700 shrink-0">{q.number}.</span>
+                            <span
+                              dangerouslySetInnerHTML={{
+                                __html: formatUnderlineHtml(q.prompt || ''),
+                              }}
+                            />
+                          </div>
+
+                          {/* Quick Edit Trigger */}
+                          <div className="opacity-0 group-hover:opacity-100 transition flex items-center space-x-1">
+                            <button
+                              onClick={() => setEditingQuestionId(q.id)}
+                              className="px-2 py-0.8 rounded-lg text-slate-600 hover:text-blue-700 hover:bg-blue-50 text-[11px] font-semibold flex items-center space-x-1 border border-slate-200 bg-white shadow-2xs"
+                              title="Chỉnh sửa câu hỏi, đáp án, giải thích trực tiếp (0 token AI)"
+                            >
+                              <Edit3 className="w-3 h-3 text-blue-600" />
+                              <span>Sửa trực tiếp (0đ)</span>
+                            </button>
+                            <button
+                              onClick={() => onOpenAdjustment(ex.id, q.number)}
+                              className="px-2 py-0.8 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-50 text-[11px] font-semibold flex items-center space-x-1 border border-slate-200 bg-white shadow-2xs"
+                              title="Yêu cầu AI viết lại hoặc nâng độ khó câu này"
+                            >
+                              <Sparkles className="w-3 h-3 text-amber-500" />
+                              <span>AI chỉnh câu</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Options if Multiple Choice */}
+                        {q.options && q.options.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2.5 text-xs text-slate-700 pl-5">
+                            {q.options.map((opt) => {
+                              const isCorrect =
+                                viewMode === 'teacher' &&
+                                (q.correctAnswer.startsWith(opt.key) ||
+                                  q.correctAnswer.includes(` ${opt.key}.`) ||
+                                  q.correctAnswer === opt.key);
+
+                              return (
+                                <div
+                                  key={opt.key}
+                                  className={`p-2 rounded-lg border transition ${
+                                    isCorrect
+                                      ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-800'
+                                      : 'bg-white border-slate-200'
+                                  }`}
+                                >
+                                  <span className="font-bold mr-1">{opt.key}.</span>
+                                  <span
+                                    dangerouslySetInnerHTML={{
+                                      __html: formatUnderlineHtml(opt.text || ''),
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Open Ended response line for student view */}
+                        {(!q.options || q.options.length === 0) && viewMode === 'student' && (
+                          <div className="mt-2 text-xs text-slate-400 italic pl-5">
+                            Answer: __________________________________________________________________
+                          </div>
+                        )}
+
+                        {/* Teacher Explanation & Correct Answer */}
+                        {viewMode === 'teacher' && (
+                          <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-xs space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-extrabold text-emerald-800">
+                                Đáp án: {q.correctAnswer}
+                              </span>
+                              {q.cognitiveTag && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                                  Bloom: {q.cognitiveTag}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-slate-700 text-[11px] leading-relaxed">
+                              <strong className="text-slate-900">Giải thích:</strong>{' '}
+                              <span
+                                dangerouslySetInnerHTML={{
+                                  __html: formatUnderlineHtml(q.explanation || ''),
+                                }}
+                              />
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* Matrix Answer Key Summary Table */}
+        {(viewMode === 'matrix' || viewMode === 'teacher') && (
+          <div className="pt-6 border-t-2 border-slate-200 space-y-4">
+            <h4 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>BẢNG ĐÁP ÁN TỔNG HỢP (ANSWER KEY MATRIX)</span>
+            </h4>
+
+            {exercises.map((ex) => (
+              <div key={ex.id} className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-700">
+                  {ex.title}:
+                </span>
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                  {ex.questions.map((q) => (
+                    <div
+                      key={q.number}
+                      className="text-center p-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+                    >
+                      <span className="text-[10px] text-slate-500 block font-semibold">
+                        C.{q.number}
+                      </span>
+                      <span className="font-bold text-emerald-700 block truncate">
+                        {q.correctAnswer.split('.')[0] || q.correctAnswer}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Floating Bottom Action Bar */}
+      <div className="sticky bottom-4 max-w-4xl mx-auto bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl border border-slate-800">
+        <div>
+          <span className="text-xs font-semibold text-slate-300 block">
+            Cơ chế phản hồi sư phạm:
+          </span>
+          <span className="text-[11px] text-slate-400">
+            Chọn <strong>"Điều chỉnh"</strong> để đổi độ khó/dạng bài, hoặc <strong>"Hoàn tất"</strong> để tải file Word .docx chuẩn.
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          {onSaveTemplate && (
+            <button
+              onClick={onSaveTemplate}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition border border-white/20"
+              title="Lưu cấu hình bài tập thành mẫu (0 AI calls)"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Lưu mẫu</span>
+            </button>
+          )}
+          <button
+            onClick={() => onOpenAdjustment()}
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition shadow-md"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>AI Điều chỉnh</span>
+          </button>
+          <button
+            onClick={onExportWord}
+            className="flex items-center space-x-2 px-6 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white transition shadow-lg shadow-emerald-500/30"
+          >
+            <Download className="w-4 h-4" />
+            <span>Hoàn tất & Tải file Word (.docx)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
