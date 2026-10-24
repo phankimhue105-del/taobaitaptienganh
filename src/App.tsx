@@ -188,13 +188,21 @@ export default function App() {
         console.error(`Lỗi tạo Đề ${variant}:`, err);
         firstFailedError = err;
 
+        let varErr = err.message || 'Lỗi khi gọi API tạo đề.';
+        if (
+          varErr.includes('Unexpected end of JSON') ||
+          varErr.includes('Failed to execute \'json\'')
+        ) {
+          varErr = 'Máy chủ phản hồi rỗng hoặc kết nối bị ngắt quãng (Timeout). Dữ liệu được bảo toàn.';
+        }
+
         newSets.push({
           id: `exam-${variant}`,
           variantNumber: variant,
           title: `Đề ${variant}`,
           exercises: [],
           status: 'error',
-          errorMessage: err.message || 'Lỗi khi gọi API tạo đề.',
+          errorMessage: varErr,
         });
 
         // Nếu là lỗi Quota 429 hoặc daily exhausted, dừng tạo các đề tiếp theo để tránh spam
@@ -266,8 +274,17 @@ export default function App() {
         err.message?.includes('quá tải') ||
         err.message?.includes('UNAVAILABLE');
 
+      let friendlyMessage = err.message || 'Lỗi không xác định khi biên soạn.';
+      if (
+        friendlyMessage.includes('Unexpected end of JSON') ||
+        friendlyMessage.includes('Failed to execute \'json\'')
+      ) {
+        friendlyMessage =
+          'Máy chủ AI phản hồi rỗng hoặc kết nối bị ngắt quãng giữa chừng (Timeout). Toàn bộ cấu hình 8 tham số bài tập và học liệu của bạn vẫn được lưu nguyên vẹn 100%. Vui lòng bấm thử lại.';
+      }
+
       setGenerateError({
-        message: err.message || 'Lỗi không xác định khi biên soạn.',
+        message: friendlyMessage,
         isQuota: Boolean(isQuota),
         is503: Boolean(is503),
         model: err.model,
