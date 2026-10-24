@@ -328,4 +328,199 @@ export async function generateExercisesService(params: GenerateExercisesParams) 
             definition: v.definition,
           }))
         : undefined,
-      grammarPoints: Array.isArray(rest.grammar
+      grammarPoints: Array.isArray(rest.grammarPoints)
+        ? rest.grammarPoints.slice(0, 8).map((g: any) => ({
+            topic: g.topic,
+            formula: g.formula,
+            rule: g.rule,
+          }))
+        : undefined,
+      suggestedFocusTopics: rest.suggestedFocusTopics,
+    };
+  }
+
+  // Thu gọn rawMaterial nếu có nhiều khoảng trắng thừa
+  const trimmedRaw = rawMaterial ? rawMaterial.trim().replace(/\n\s*\n\s*\n+/g, '\n\n') : '';
+
+  const prompt = `
+Dưới đây là thông tin học liệu nguồn và danh sách các bài tập cần biên soạn theo ĐÚNG 8 THAM SỐ KỸ THUẬT:
+
+HỌC LIỆU NGUỒN:
+${trimmedRaw ? `Văn bản gốc:\n"""\n${trimmedRaw}\n"""\n` : ''}
+${cleanedExtracted ? `Dữ liệu phân tích sư phạm cốt lõi:\n${JSON.stringify(cleanedExtracted, null, 2)}\n` : ''}
+
+DANH SÁCH BÀI TẬP CẦN TẠO (Tuân thủ nghiêm ngặt từng tham số):
+${JSON.stringify(parameters, null, 2)}
+
+QUY TẮC BẮT BUỘC VỀ HÌNH THỨC:
+1. Nếu format là "mcq_3": Bắt buộc câu hỏi trắc nghiệm chỉ có 3 phương án lựa chọn: key là "A", "B", "C".
+2. Nếu format là "mcq_4": Bắt buộc câu hỏi trắc nghiệm có 4 phương án lựa chọn: key là "A", "B", "C", "D".
+3. Nếu format là "true_false": Bắt buộc câu hỏi trắc nghiệm True / False với 2 phương án: key "A": "True", key "B": "False" (hoặc thêm "Not Given" nếu là bài đọc hiểu phân loại).
+4. Nếu format là "open_ended": Đây là bài tự luận (điền từ khuyết, chia động từ, viết lại câu, tìm lỗi sai và sửa lại). KHÔNG có options A/B/C/D, correctAnswer là từ/câu trả lời chuẩn xác.
+5. Dạng bài ("exerciseType"): Sử dụng đúng định dạng người dùng đã nhập (VD: "${parameters.map((p: any) => p.exerciseType).join(', ')}").
+6. Trình độ CEFR: Tuân thủ mức độ đã chọn từ 12 cấp độ (Pre-A1, A1, A1+, A2, A2+, B1, B1+, B2, B2+, C1, C1+, C2).
+7. Nếu là bài Đọc hiểu: Cung cấp đoạn văn "readingPassage" bằng tiếng Anh chuẩn phù hợp với CEFR. KHÔNG tô màu nền cho đoạn văn.
+8. Nếu là bài Nghe: Cung cấp đoạn transcript "audioScript" tự nhiên, kèm speaker cues và đánh dấu từ khóa dẫn đến đáp án.
+9. Mỗi câu hỏi phải có "correctAnswer" và "explanation" (giải thích sư phạm rõ ràng, chỉ rõ tại sao đúng và phương án nhiễu sai ở đâu).
+
+QUY TẮC CHẤT LƯỢNG CÂU HỎI TRẮC NGHIỆM (Bắt buộc cho mọi đề):
+10. Phương án nhiễu tương đương: Tất cả các phương án ABCD phải tương đương về loại từ (noun/verb/adj/adv) và chức năng ngữ pháp khi dạng bài yêu cầu. Ví dụ: nếu chỗ trống cần một danh từ, tất cả phương án đều là danh từ; nếu cần một thì động từ, tất cả phương án đều là dạng động từ phù hợp.
+11. Chỉ một đáp án đúng: CHỈ có DUY NHẤT một đáp án đúng trong ngữ cảnh. Kiểm tra kỹ lưỡng tất cả phương án trước khi xác định correctAnswer.
+12. Không để đáp án đúng nổi bật bất thường vì dài hơn, ngắn hơn hoặc có cấu trúc khác biệt rõ ràng so với các phương án còn lại.
+13. Phương án nhiễu phải sai rõ ràng về ngữ pháp hoặc ngữ nghĩa nhưng vẫn hợp lý để đánh lừa học sinh thiếu kiến thức.
+14. Bài Phát âm (Pronunciation & Stress): Dùng thẻ HTML <u>phần cần gạch chân</u> cho âm tiết hoặc nhóm chữ cần kiểm tra trong prompt câu hỏi. TUYỆT ĐỐI không dùng ký hiệu '>', '>>', mũi tên hoặc ký tự thay thế khác.
+${totalExams > 1 ? `
+NHIỀU ĐỀ – YÊU CẦU ĐẶC BIỆT:
+Đây là ĐỀ SỐ ${examVariant} trong tổng số ${totalExams} đề cần tạo từ cùng nguồn học liệu. Yêu cầu bắt buộc:
+- Tạo câu hỏi khác biệt hoàn toàn với các đề khác: sử dụng ngữ cảnh khác, ví dụ khác, hoặc góc kiểm tra khác cho cùng chủ điểm.
+- Không chỉ đảo thứ tự câu hoặc hoán vị phương án. Nội dung câu hỏi phải thực sự khác nhau.
+- Giữ nguyên số lượng câu, dạng bài, CEFR và Bloom tương đương với các đề còn lại.
+- Bám sát ngữ liệu gốc, không bổ sung kiến thức ngoài phạm vi nguồn học liệu.
+` : ''}
+Định dạng JSON trả về:
+{
+  "exercises": [
+    {
+      "id": "param-id",
+      "order": 1,
+      "title": "Exercise 1: [Tên dạng bài do người dùng nhập]",
+      "exerciseType": "[Tên dạng bài]",
+      "format": "mcq_4" | "mcq_3" | "true_false" | "open_ended",
+      "cefrLevel": "B1",
+      "cognitiveLevel": "Vận dụng",
+      "focus": "Trọng tâm kiến thức",
+      "instruction": "Lệnh bài tập bằng tiếng Anh chuẩn sư phạm (VD: Choose the best option A, B, C or D...)",
+      "readingPassage": "Nội dung đoạn văn đọc nếu cần",
+      "audioScript": "Nội dung Audio Script nếu là bài nghe",
+      "questions": [
+        {
+          "id": "q1",
+          "number": 1,
+          "prompt": "Nội dung câu hỏi",
+          "options": [
+            { "key": "A", "text": "Phương án A" },
+            { "key": "B", "text": "Phương án B" },
+            { "key": "C", "text": "Phương án C" }
+          ],
+          "correctAnswer": "A. Phương án A",
+          "explanation": "Giải thích sư phạm chi tiết",
+          "cognitiveTag": "Thông hiểu"
+        }
+      ]
+    }
+  ]
+}
+`;
+
+  // Cơ chế retry nội bộ có kiểm soát trên Server khi gặp lỗi 503 quá tải tạm thời
+  const maxServerRetries = 1;
+  let response: any = null;
+
+  for (let attempt = 0; attempt <= maxServerRetries; attempt++) {
+    try {
+      response = await ai.models.generateContent({
+        model: getGeminiModel(),
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.LOW,
+          },
+        },
+      });
+      break; // Thành công, thoát vòng lặp
+    } catch (err: any) {
+      const rawMsg = err?.message || '';
+      const status = err?.status || err?.statusCode || 500;
+      const is503 = status === 503 || rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE') || rawMsg.includes('overloaded');
+
+      if (is503 && attempt < maxServerRetries) {
+        const jitter = Math.random() * 800;
+        const delayMs = 2500 * (attempt + 1) + jitter;
+        console.warn(`[aiService] Google AI 503 tạm thời quá tải. Đang thử lại cục bộ lần ${attempt + 1}/${maxServerRetries} sau ${Math.round(delayMs)}ms...`);
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  let resultText = (response?.text || '').trim();
+  if (resultText.startsWith('```')) {
+    resultText = resultText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+  if (!resultText) resultText = '{"exercises": []}';
+  return JSON.parse(resultText);
+}
+
+export interface AdjustExerciseParams {
+  currentExercise: any;
+  adjustmentCommand: string;
+  targetQuestionNumber?: number;
+  rawMaterial?: string;
+}
+
+export async function adjustExerciseService(params: AdjustExerciseParams) {
+  const { currentExercise, adjustmentCommand, targetQuestionNumber, rawMaterial } = params;
+
+  if (!currentExercise || !adjustmentCommand) {
+    throw new Error('Thiếu dữ liệu bài tập hoặc lệnh điều chỉnh.');
+  }
+
+  const ai = getAIClient();
+
+  const prompt = `
+Bạn đang trong chế độ "Điều chỉnh" học liệu của Chuyên gia Biên soạn Học liệu Tiếng Anh.
+Nhiệm vụ của bạn là GIỮ NGUYÊN cấu trúc bài tập hiện tại, CHỈ ĐIỀU CHỈNH nội dung theo yêu cầu của giáo viên.
+
+BÀI TẬP HIỆN TẠI:
+${JSON.stringify(currentExercise, null, 2)}
+
+HỌC LIỆU GỐC NẾU CÓ THAM CHIẾU:
+${rawMaterial ? `"""\n${rawMaterial}\n"""` : 'Không có'}
+
+LỆNH ĐIỀU CHỈNH CỦA GIÁO VIÊN:
+${targetQuestionNumber ? `(Nhắm cụ thể vào Câu số ${targetQuestionNumber})` : ''}
+"${adjustmentCommand}"
+
+QUY TẮC:
+- Nếu giáo viên yêu cầu thay đổi độ khó một câu (VD: Tăng độ khó câu 3 lên Vận dụng cao): Cập nhật câu đó với phương án gây nhiễu tinh tế hơn, giữ đúng cấu trúc và chủ điểm.
+- Nếu giáo viên yêu cầu đổi hình thức (VD: Đổi sang 3 phương án, hoặc True/False, hoặc tự luận): Chuyển đổi chính xác sang hình thức đó.
+- Đảm bảo câu hỏi có đáp án chuẩn xác và giải thích rõ ràng.
+- Trả về JSON của DUY NHẤT bài tập đã được cập nhật hoàn chỉnh:
+
+{
+  "updatedExercise": {
+    "id": "${currentExercise.id || 'ex-1'}",
+    "order": ${currentExercise.order || 1},
+    "title": "Tiêu đề bài tập",
+    "exerciseType": "...",
+    "format": "mcq_4" | "mcq_3" | "true_false" | "open_ended",
+    "cefrLevel": "...",
+    "cognitiveLevel": "...",
+    "focus": "...",
+    "instruction": "...",
+    "readingPassage": "...",
+    "audioScript": "...",
+    "questions": [...]
+  },
+  "adjustmentSummary": "Tóm tắt ngắn gọn các thay đổi đã thực hiện bằng tiếng Việt cho giáo viên"
+}
+`;
+
+  const response = await ai.models.generateContent({
+    model: getGeminiModel(),
+    contents: prompt,
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.LOW,
+      },
+    },
+  });
+
+  const resultText = response.text || '{}';
+  return JSON.parse(resultText);
+}
