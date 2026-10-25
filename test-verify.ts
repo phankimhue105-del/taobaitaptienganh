@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { parseUnderlineToRuns } from './src/utils/docxExport';
 import { validateAndFixMcqBalance } from './src/utils/mcqQuality';
+import { extractJsonFromText, normalizeExercisesPayload } from './src/server/aiService';
 
 console.log('================================================================');
 console.log('   BẮT ĐẦU KIỂM THỬ XÁC MINH CÁC CHỨC NĂNG DỰ ÁN EDUGENIUS');
@@ -328,6 +329,54 @@ assert(
   appContent.includes('generateError.is503') && appContent.includes('Bấm thử lại ngay'),
   'App.tsx có giao diện cảnh báo lỗi 503 chuyên biệt kèm nút bấm thử lại chủ động',
   'Bảo toàn 100% dữ liệu đã nhập, phân biệt hoàn toàn với lỗi 429 hết hạn mức.'
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. KIỂM TRA CHUẨN HÓA DỮ LIỆU ĐỀ THI & KHẮC PHỤC LỖI TẠO NHIỀU ĐỀ
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n[NHÓM 9] Kiểm tra chuẩn hóa dữ liệu đề thi & độ bền bỉ khi tạo nhiều đề:');
+
+// Test 9.1: extractJsonFromText bóc tách JSON chuẩn xác khỏi markdown và lời thoại AI
+const markdownWrappedJson = 'Dưới đây là đề thi:\n```json\n{"exercises": [{"id": "ex1", "title": "Ex 1"}]}\n```\nChúc bạn thành công!';
+const extractedClean = extractJsonFromText(markdownWrappedJson);
+assert(
+  extractedClean === '{"exercises": [{"id": "ex1", "title": "Ex 1"}]}',
+  'extractJsonFromText loại bỏ sạch sẽ markdown và văn bản dẫn xuất từ AI',
+  'Đã bóc tách thành công khối JSON hợp lệ nằm giữa các đoạn text.'
+);
+
+// Test 9.2: normalizeExercisesPayload xử lý trường hợp AI trả về mảng trực tiếp
+const arrayPayload = [{ id: 'ex-array', title: 'Array Exercise', questions: [] }];
+const normalizedArray = normalizeExercisesPayload(arrayPayload);
+assert(
+  normalizedArray.exercises && normalizedArray.exercises.length === 1 && normalizedArray.exercises[0].id === 'ex-array',
+  'normalizeExercisesPayload chuẩn hóa mảng JSON trực tiếp thành { exercises: [...] }',
+  'Ngăn chặn lỗi "data.exercises is undefined" khi AI trả về mảng.'
+);
+
+// Test 9.3: normalizeExercisesPayload xử lý key động (de_1, exam, data...)
+const dynamicKeyPayload = { de_1: [{ id: 'ex-de1', title: 'Đề 1', exerciseType: 'MCQ' }] };
+const normalizedDynamic = normalizeExercisesPayload(dynamicKeyPayload);
+assert(
+  normalizedDynamic.exercises && normalizedDynamic.exercises.length === 1 && normalizedDynamic.exercises[0].id === 'ex-de1',
+  'normalizeExercisesPayload tự động nhận diện key theo số thứ tự đề (de_1)',
+  'Học liệu tạo ra không bị mất khi AI đặt key theo tên đề.'
+);
+
+// Test 9.4: normalizeExercisesPayload xử lý bài tập đơn lẻ có mảng questions
+const singleExercisePayload = { id: 'single-ex', title: 'Single', questions: [{ id: 'q1' }] };
+const normalizedSingle = normalizeExercisesPayload(singleExercisePayload);
+assert(
+  normalizedSingle.exercises && normalizedSingle.exercises.length === 1 && normalizedSingle.exercises[0].id === 'single-ex',
+  'normalizeExercisesPayload xử lý cấu trúc bài tập đơn lẻ thành mảng exercises chuẩn',
+  'Đảm bảo mọi hình thức cấu trúc trả về đều tương thích với frontend.'
+);
+
+// Test 9.5: App.tsx bảo toàn lỗi đầu tiên (không ghi đè lỗi Đề 1 bằng Đề 2)
+assert(
+  appContent.includes('if (!firstFailedError) {') || appContent.includes('if (!firstFailedError)'),
+  'App.tsx lưu giữ lỗi đầu tiên gặp phải, không ghi đè lỗi Đề 1 bằng Đề 2',
+  'Báo cáo chính xác nguyên nhân gốc khi cả hai đề cùng thất bại.'
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
