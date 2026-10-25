@@ -293,6 +293,90 @@ Yêu cầu xuất ra JSON với các trường:
   return parsedData;
 }
 
+/**
+ * Trích xuất chuỗi JSON sạch từ phản hồi AI (hỗ trợ markdown fences, văn bản mở đầu/kết thúc...)
+ */
+export function extractJsonFromText(raw: string): string {
+  let text = (raw || '').trim();
+  if (!text) return '{}';
+
+  // 1. Nếu có khối code markdown ```json ... ``` hoặc ``` ... ```
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  const matches = [...text.matchAll(codeBlockRegex)];
+  if (matches.length > 0) {
+    let longestMatch = matches[0][1].trim();
+    for (const m of matches) {
+      if (m[1].trim().length > longestMatch.length) {
+        longestMatch = m[1].trim();
+      }
+    }
+    text = longestMatch;
+  } else if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+
+  // 2. Tìm cặp ngoặc { ... } hoặc [ ... ] ngoài cùng
+  const firstBrace = text.search(/[{\[]/);
+  const lastBrace = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    text = text.substring(firstBrace, lastBrace + 1);
+  }
+
+  return text.trim() || '{}';
+}
+
+/**
+ * Chuẩn hóa kết quả bài tập trả về từ Gemini thành cấu trúc đồng nhất { exercises: any[] }.
+ * Hỗ trợ các định dạng Gemini có thể sinh ra:
+ * - Mảng trực tiếp: [ { id, title, questions } ]
+ * - Object chứa key mảng: exercises, data, exam, exerciseList, tests...
+ * - Object chứa key theo số đề: de_1, de1, examVariant_1, variant_1...
+ * - Object bài tập đơn lẻ chứa mảng questions
+ */
+export function normalizeExercisesPayload(parsed: any): { exercises: any[] } {
+  if (!parsed) {
+    return { exercises: [] };
+  }
+
+  // 1. Trường hợp AI trả về mảng trực tiếp
+  if (Array.isArray(parsed)) {
+    return { exercises: parsed };
+  }
+
+  // 2. Trường hợp AI trả về object
+  if (typeof parsed === 'object') {
+    // 2.1. Các key phổ biến chứa danh sách bài tập
+    const candidateKeys = ['exercises', 'data', 'exam', 'exerciseList', 'items', 'tests', 'questionsList'];
+    for (const key of candidateKeys) {
+      if (Array.isArray(parsed[key]) && parsed[key].length > 0) {
+        return { exercises: parsed[key] };
+      }
+    }
+
+    // 2.2. Kiểm tra key động theo số thứ tự đề (de_1, de1, variant_1, exam_1, ...)
+    for (const key of Object.keys(parsed)) {
+      if (Array.isArray(parsed[key]) && parsed[key].length > 0) {
+        const firstItem = parsed[key][0];
+        if (firstItem && typeof firstItem === 'object' && (firstItem.questions || firstItem.exerciseType || firstItem.title || firstItem.format)) {
+          return { exercises: parsed[key] };
+        }
+      }
+    }
+
+    // 2.3. Trường hợp AI trả về một bài tập đơn lẻ (chứa mảng questions)
+    if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+      return { exercises: [parsed] };
+    }
+
+    // 2.4. Nếu object có key exercises nhưng rỗng
+    if (Array.isArray(parsed.exercises)) {
+      return { exercises: parsed.exercises };
+    }
+  }
+
+  return { exercises: [] };
+}
+
 export interface GenerateExercisesParams {
   rawMaterial?: string;
   extractedData?: any;
@@ -416,6 +500,8 @@ NHIỀU ĐỀ – YÊU CẦU ĐẶC BIỆT:
   const maxServerRetries = 1;
   let response: any = null;
 
+  console.log(`[aiService] Bắt đầu sinh Đề ${examVariant}/${totalExams} (Số dạng bài: ${parameters.length})...`);
+
   for (let attempt = 0; attempt <= maxServerRetries; attempt++) {
     try {
       response = await ai.models.generateContent({
@@ -446,12 +532,25 @@ NHIỀU ĐỀ – YÊU CẦU ĐẶC BIỆT:
     }
   }
 
-  let resultText = (response?.text || '').trim();
-  if (resultText.startsWith('```')) {
-    resultText = resultText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const rawResult = (response?.text || '').trim();
+  const cleanedJson = extractJsonFromText(rawResult);
+
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(cleanedJson);
+  } catch (parseErr: any) {
+    console.error(`[aiService] Lỗi parse JSON cho Đề ${examVariant}/${totalExams}:`, parseErr?.message);
+    throw new Error(`Định dạng JSON từ AI không hợp lệ cho Đề ${examVariant}: ${parseErr?.message || 'Lỗi cú pháp'}`);
   }
-  if (!resultText) resultText = '{"exercises": []}';
-  return JSON.parse(resultText);
+
+  const normalized = normalizeExercisesPayload(parsed);
+  console.log(`[aiService] Hoàn tất sinh Đề ${examVariant}/${totalExams}. Số bài tập trích xuất: ${normalized.exercises.length}.`);
+
+  if (normalized.exercises.length === 0) {
+    console.warn(`[aiService] CẢNH BÁO: Không có bài tập nào cho Đề ${examVariant}/${totalExams}. Các keys có trong JSON:`, Object.keys(parsed || {}));
+  }
+
+  return normalized;
 }
 
 export interface AdjustExerciseParams {
