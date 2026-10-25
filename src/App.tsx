@@ -167,12 +167,26 @@ export default function App() {
           totalExams: targetCount,
         });
 
-        if (!data.exercises || data.exercises.length === 0) {
+        // Chuẩn hóa dữ liệu trả về từ API một cách an toàn
+        let rawExercises: any[] = [];
+        if (Array.isArray(data)) {
+          rawExercises = data;
+        } else if (Array.isArray(data?.exercises)) {
+          rawExercises = data.exercises;
+        } else if (Array.isArray(data?.data)) {
+          rawExercises = data.data;
+        } else if (Array.isArray(data?.exam)) {
+          rawExercises = data.exam;
+        } else if (data && typeof data === 'object' && Array.isArray((data as any).questions)) {
+          rawExercises = [data];
+        }
+
+        if (rawExercises.length === 0) {
           throw new Error(`AI không thể tạo câu hỏi cho Đề ${variant}.`);
         }
 
         // Cân bằng phân bổ đáp án & format (0 AI calls)
-        const { exercises: validatedExercises } = validateAndFixMcqBalance(data.exercises);
+        const { exercises: validatedExercises } = validateAndFixMcqBalance(rawExercises);
 
         // Lưu cache cho đề này
         setCachedExercises(variantSig, validatedExercises);
@@ -186,9 +200,12 @@ export default function App() {
         });
       } catch (err: any) {
         console.error(`Lỗi tạo Đề ${variant}:`, err);
-        firstFailedError = err;
+        // Lưu lỗi đầu tiên gặp phải, không ghi đè lỗi Đề 1 bằng lỗi Đề 2
+        if (!firstFailedError) {
+          firstFailedError = err;
+        }
 
-        let varErr = err.message || 'Lỗi khi gọi API tạo đề.';
+        let varErr = err.message || `Lỗi khi gọi API tạo Đề ${variant}.`;
         if (
           varErr.includes('Unexpected end of JSON') ||
           varErr.includes('Failed to execute \'json\'')
@@ -281,6 +298,9 @@ export default function App() {
       ) {
         friendlyMessage =
           'Máy chủ AI phản hồi rỗng hoặc kết nối bị ngắt quãng giữa chừng (Timeout). Toàn bộ cấu hình 8 tham số bài tập và học liệu của bạn vẫn được lưu nguyên vẹn 100%. Vui lòng bấm thử lại.';
+      } else if (targetCount > 1 && newSets.length > 0 && newSets.every((s) => s.status === 'error')) {
+        const errCauses = newSets.map((s) => `${s.title}: ${s.errorMessage || 'Lỗi không xác định'}`).join('; ');
+        friendlyMessage = `Không thể tạo nội dung cho các đề đã chọn (${errCauses}). Toàn bộ cấu hình và học liệu của bạn được bảo toàn.`;
       }
 
       setGenerateError({
@@ -333,11 +353,24 @@ export default function App() {
         totalExams: examSets.length,
       });
 
-      if (!data.exercises || data.exercises.length === 0) {
+      let rawExercises: any[] = [];
+      if (Array.isArray(data)) {
+        rawExercises = data;
+      } else if (Array.isArray(data?.exercises)) {
+        rawExercises = data.exercises;
+      } else if (Array.isArray(data?.data)) {
+        rawExercises = data.data;
+      } else if (Array.isArray(data?.exam)) {
+        rawExercises = data.exam;
+      } else if (data && typeof data === 'object' && Array.isArray((data as any).questions)) {
+        rawExercises = [data];
+      }
+
+      if (rawExercises.length === 0) {
         throw new Error(`AI không thể tạo danh sách câu hỏi cho Đề ${variantNumber}.`);
       }
 
-      const { exercises: validatedExercises } = validateAndFixMcqBalance(data.exercises);
+      const { exercises: validatedExercises } = validateAndFixMcqBalance(rawExercises);
 
       setExamSets((prev) =>
         prev.map((exam) =>
